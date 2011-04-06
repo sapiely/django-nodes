@@ -1,0 +1,9 @@
+{% load i18n %}
+
+<ul>
+    {% for item in item_list.object_list_cache %}
+    <li><a href="{{ item.get_link_or_absolute_url_cache }}{{ query_string.full.full }}">{{ item.name }}</a></li>
+    {% endfor %}
+</ul>
+
+{% include "nodes/pagination.html" %}

@@ -1,0 +1,5 @@
+<ul>
+    {% for item in chain %}
+    <li>{% if not forloop.last %}<a href="{{ item.link }}">{{ item.name }}</a>{% else %}<span>{{ item.name }}</span>{% endif %}</li>
+    {% endfor %}
+</ul>

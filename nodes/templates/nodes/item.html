@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+
+    {% if item.show_item_name %}
+    <h2>{{ item.name }}</h2>
+    {% endif %}
+
+    {% if item.image %}
+    <a style="float: left; padding: 0 10px 10px 0;" href="{{ item.image.url }}"><img src="{{ item.image.extra_thumbnails.main }}" width="{{ item.image.extra_thumbnails.main.width }}" height="{{ item.image.extra_thumbnails.main.height }}" alt="{{ item.name }}"></a>
+    {% endif %}
+
+    <p>{{ item.text|safe }}</p>
+
+    {% if item.image_set.count %}
+    <p>Галерея</p>
+    <ul>
+        {% for image in item.image_set.all %}
+        <li><a href="{{ image.image.url }}"><img src="{{ image.image.extra_thumbnails.main }}" width="{{ image.image.extra_thumbnails.main.width }}" height="{{ image.image.extra_thumbnails.main.height }}" alt="{{ item.name }}"></a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    
+    {% if item.show_node_link %}
+    <a href="{{ item.get_absolute_url_for_node }}{{ query_string.as__full }}">← К списку</a>
+    {% endif %}
+
+{% endblock %}
