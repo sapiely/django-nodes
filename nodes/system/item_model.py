@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
+from django.core.urlresolvers import reverse
 
 class Item(models.Model):
     """A simple node's item model"""
@@ -45,36 +46,13 @@ class Item(models.Model):
     def __unicode__(self):
         return self.name
         
-    @models.permalink
-    def get_absolute_url(self, path=None, node_link=False):
-        path = path or (self.node.get_link_or_path())
-        path = str(path.strip('/'))
-        slug = '' if node_link else 'i/%s/' % self.slug
-        
-        kwargs = {'path':path, '_0':slug}
-        self._cache_url_kwargs = kwargs
-        
-        return ('nodes_%s' % self.node_name, (), kwargs)
-        
-    def get_absolute_url_for_node(self, **kwargs):
-        kwargs['node_link'] = True
-        return self.get_absolute_url(**kwargs)
-
-    @models.permalink
-    def get_absolute_url_cache(self, node_link=False):
-        kwargs = self._cache_url_kwargs if hasattr(self, '_cache_url_kwargs') and isinstance(self._cache_url_kwargs, dict) else None
-        kwargs = kwargs or {'path':'cache/error_link/for/%s' % self.slug, '_0':''}
-        kwargs['_0'] = '' if node_link else 'i/%s/' % self.slug
-        return ('nodes_%s' % self.node_name, (), kwargs)
-
-    def get_absolute_url_cache_for_node(self):
-        return self.get_absolute_url_cache(node_link=True)
-        
-    def get_link_or_absolute_url(self, cache=False, **kwargs):
-        if self.link:
-            return self.link
+    def get_absolute_url(self, use_link=True):
+        if use_link and self.link:
+            link = self.link
         else:
-            return self.get_absolute_url_cache(**kwargs) if cache else self.get_absolute_url(**kwargs)
-
-    def get_link_or_absolute_url_cache(self):
-        return self.get_link_or_absolute_url(cache=True)
+            data = {'path': self.node.get_link_or_path().strip('/').__str__(), '_0': 'i/%s/' % self.slug}
+            link = reverse('nodes_%s' % self.node_name, kwargs=data)
+        return link
+        
+    def get_absolute_url_real(self):
+        return self.get_absolute_url(use_link=False)

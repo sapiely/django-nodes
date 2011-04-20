@@ -100,15 +100,6 @@ def main_list(request, **kwargs):
     pagination  = pagination_tool(item_list, 2)
     # end paginator
 
-    # cycle for cache url in items
-    list_temp = []
-    for item in item_list.object_list:
-        item.get_absolute_url(path=node.get_link_or_path())
-        item.get_link_or_absolute_url_cache()
-        list_temp.append(item)
-    item_list.object_list_cache = list_temp
-    # end cycle
-
     template    = 'list.%s.html' % node.template if node.template else 'list.html'
     templates   = ["nodes/%s/%s" % (node.node_name, template), "nodes/%s" % template]
 
