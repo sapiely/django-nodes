@@ -118,7 +118,7 @@ class Node(models.Model):
     def get_order_by(self, default=None):
         fields      = [i.name for i in self.item_set.model._meta.fields]
         order_by    = [i for i in self.order_by.split(' ') if i.replace('-', '', 1) in fields] if self.order_by else []
-        order_by    = order_by if order_by else default
+        order_by    = order_by or default
         return order_by
     
     def get_path(self):

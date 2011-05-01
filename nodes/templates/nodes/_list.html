@@ -1,9 +1,15 @@
-{% load i18n %}
+{% extends 'base.html' %}
 
-<ul>
-    {% for item in item_list.object_list_cache %}
-    <li><a href="{{ item.get_link_or_absolute_url_cache }}{{ query_string.full.full }}">{{ item.name }}</a></li>
-    {% endfor %}
-</ul>
+{% block content %}
 
-{% include "nodes/pagination.html" %}
+    <ul id="newsList">
+        {% for item in item_list.object_list %}
+        <li>
+            <h2><a href="{{ item.get_absolute_url }}{{ query_string.as__full }}">{{ item.name }}</a> {{ item.date_start|date:"d.m.Y" }}</h2>
+        </li>
+        {% endfor %}
+    </ul>
+
+    {% include "nodes/pagination.html" %}
+
+{% endblock %}

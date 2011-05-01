@@ -3,7 +3,7 @@ from django.conf import settings
 from django.utils.translation import ugettext
 from menus.template import simple_tag_ex, inclusion_tag_ex, get_from_context
 
-def show_meta_title(context, main_title='', template="meta/title.html"):
+def show_meta_title(context, main_title='', template="metas/title.html"):
     """render a meta title list into requested template"""
     request = get_from_context(context, 'request')
     title   = [main_title] if main_title else []
@@ -12,7 +12,7 @@ def show_meta_title(context, main_title='', template="meta/title.html"):
     context.update({'title':title, 'template':template, })
     return context
 
-def show_meta_chain(context, main_title='', main_url='/', start_level=0, template="meta/chain.html"):
+def show_meta_chain(context, main_title='', main_url='/', start_level=0, template="metas/chain.html"):
     """
     Shows the breadcrumb from the node that has the same url as the current request
     - main_title: title of the first breadcrumb (if empty, will be ignored with main_url)

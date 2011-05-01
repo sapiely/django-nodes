@@ -6,7 +6,7 @@ from menus.template import simple_tag_ex, inclusion_tag_ex, get_from_context
 from menus.menu_pool import menu_pool
 
 def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100, 
-                template="menu/menu.html", namespace=None, root_id=None, show_unvisible=False):
+                template="menus/menu.html", namespace=None, root_id=None, show_unvisible=False):
     """
     render a nested list of all children of the pages
     - from_level: starting level
@@ -20,9 +20,9 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
 
     # If there's an exception (500), default context_processors may not be called.
     request = context.get('request', None)
-    if not request: return {'template': 'menu/empty.html'}
+    if not request: return {'template': 'menus/empty.html'}
     # set template by default
-    template = template or "menu/menu.html"
+    template = template or "menus/menu.html"
     # new menu... get all the data so we can save a lot of queries
     nodes = menu_pool.get_nodes(request, namespace, root_id)
     # get nodes in root if defined
@@ -41,11 +41,11 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
                     'namespace':namespace})
     return context
 
-def show_menu_below_id(context, root_id=None, from_level=0, to_level=100, extra_inactive=100, extra_active=100, template_file="menu/menu.html", namespace=None):
+def show_menu_below_id(context, root_id=None, from_level=0, to_level=100, extra_inactive=100, extra_active=100, template_file="menus/menu.html", namespace=None):
     """displays a menu below a node that has an uid"""
     return show_menu(context, from_level, to_level, extra_inactive, extra_active, template_file, root_id=root_id, namespace=namespace)
 
-def show_sub_menu(context, levels=100, template="menu/sub_menu.html"):
+def show_sub_menu(context, levels=100, template="menus/sub_menu.html"):
     """
     show the sub menu of the current nav-node.
     -levels: how many levels deep
@@ -54,7 +54,7 @@ def show_sub_menu(context, levels=100, template="menu/sub_menu.html"):
 
     # If there's an exception (500), default context_processors may not be called.
     request = context.get('request', None)
-    if not request: return {'template': 'menu/empty.html'}
+    if not request: return {'template': 'menus/empty.html'}
 
     nodes = menu_pool.get_nodes(request)
     children = []
@@ -74,7 +74,7 @@ def show_sub_menu(context, levels=100, template="menu/sub_menu.html"):
                     })
     return context
 
-def show_breadcrumb(context, start_level=0, template="menu/breadcrumb.html"):
+def show_breadcrumb(context, start_level=0, template="menus/breadcrumb.html"):
     """
     Shows the breadcrumb from the node that has the same url as the current request
 
@@ -84,7 +84,7 @@ def show_breadcrumb(context, start_level=0, template="menu/breadcrumb.html"):
 
     # If there's an exception (500), default context_processors may not be called.
     request = context.get('request', None)
-    if not request: return {'template': 'menu/empty.html'}
+    if not request: return {'template': 'menus/empty.html'}
 
     nodes = menu_pool.get_nodes(request, breadcrumb=True)
     chain = menu_pool._get_full_chain(nodes)

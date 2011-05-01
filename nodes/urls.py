@@ -6,5 +6,5 @@ urlpatterns = patterns('',
     url(r'^'
          r'(?P<path>[a-zA-Z0-9-_/]+?)/'
           r'(i/(?P<item>[a-zA-Z0-9-_]+)(/|$))?'
-           r'$', 'nodes.views.main', {'node_name':'main'}, name='nodes_main'),
+           r'$', 'nodes.views.main_view', {'node_name':'main'}, name='nodes_main'),
 )

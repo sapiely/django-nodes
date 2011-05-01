@@ -1,4 +1,3 @@
-{% spaceless %}
 <ul>
 {% for child in children %}
 <li class="{% if child.selected %}selected{% endif %}{% if child.ancestor %}ancestor{% endif %}{% if child.sibling %}sibling{% endif %}{% if child.descendant %}descendant{% endif %}">
@@ -44,38 +43,37 @@
                                                                 <li class="{% if child9.selected %}selected{% endif %}{% if child9.ancestor %}ancestor{% endif %}{% if child9.sibling %}sibling{% endif %}{% if child9.descendant %}descendant{% endif %}">
                                                                     <a href="{{ child9.url }}">{{ child9.title }}</a>
                                                                 </li>
-                                                                {% endfor %}        
+                                                                {% endfor %}
                                                             </ul>
                                                             {% endif %}
                                                         </li>
-                                                        {% endfor %}        
+                                                        {% endfor %}
                                                     </ul>
                                                     {% endif %}
                                                 </li>
-                                                {% endfor %}        
+                                                {% endfor %}
                                             </ul>
                                             {% endif %}
                                         </li>
-                                        {% endfor %}        
+                                        {% endfor %}
                                     </ul>
                                     {% endif %}
                                 </li>
-                                {% endfor %}        
+                                {% endfor %}
                             </ul>
                             {% endif %}
                         </li>
-                        {% endfor %}        
+                        {% endfor %}
                     </ul>
                     {% endif %}
                 </li>
-                {% endfor %}        
+                {% endfor %}
             </ul>
             {% endif %}
         </li>
-        {% endfor %}        
+        {% endfor %}
     </ul>
     {% endif %}
 </li>
 {% endfor %}
 </ul>
-{% endspaceless %}

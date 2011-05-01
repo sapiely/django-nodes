@@ -8,29 +8,20 @@ def meta_to_request(request):
         request.meta.keywords       = []
         request.meta.description    = []
 
-def node_class_by_name(name, class_type='node'):
+def class_by_name_and_type(name, class_type='node'):
     """get node/item class by node name and class type"""
     if not class_type in ['item', 'node']:
         raise Exception('class_type must be one of (item, node)')
-
     try:
         class_name = class_type[0].upper() + class_type[1:] + name[0].upper() + name[1:]
-        class_from = __import__('nodes.models', {}, {}, [class_name])
-        class_inst = getattr(class_from, class_name, None)
+        class_inst = __import__('nodes.models', {}, {}, [class_name])
+        class_inst = getattr(class_inst, class_name, None)
     except ImportError:
-        raise ImportError
-        class_inst = None
-    return class_inst
+        raise ImportError('Nodes error - unable to import "nodes.models" module.')
+    if not class_inst:
+        raise Exception('Nodes error - reqired class %s (%s, %s) not defined, check your url conf.' % (class_name, class_type, name))
 
-def views_ex_by_name(view_name, node_name, obj_type):
-    """get views_ex by name"""
-    view_name = '%s_%s' % (obj_type, view_name)
-    try:
-        views_ex = __import__('nodes.views_ex.%s' % node_name, {}, {}, [view_name])
-        views_ex = getattr(views_ex, view_name, None)
-    except ImportError:
-        raise ImportError
-    return views_ex
+    return class_inst
 
 def jump_node_by_node(node):
     """search target node from node with menu_jump"""

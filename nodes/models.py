@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
-from sakkada.models.fields.imagefield import AdvancedImageWithThumbnailsField
+from sakkada.models.fields.sorlfield import AdvancedImageWithThumbnailsField
 from system.node_model import Node
 from system.item_model import Item
 import mptt

@@ -1,13 +1,7 @@
-{% load menu_tags %}
-{% load meta_tags %}
+{% extends 'base.html' %}
 
-{% load_menu %}
-{% show_meta_title "Super mega site" %}
-{% show_meta_chain "Main" %}
-{% show_meta_keywords "" "tag" %}
-{% show_meta_description "" "tag" %}
+{% block content %}
 
-<p>{{ node.text|safe }}</p>
+    <p>{{ node.text|safe }}</p>
 
-<h2>Complete navigation</h2>
-{% show_menu 0 100 100 100 %}
+{% endblock %}
