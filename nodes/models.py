@@ -1,61 +1,193 @@
 from django.db import models
+from django.core.urlresolvers import reverse
+from django.contrib.sites.models import Site
 from django.utils.translation import ugettext_lazy as _
-from sakkada.models.fields.sorlfield import AdvancedImageWithThumbnailsField
-from system.node_model import Node
-from system.item_model import Item
-import mptt
+import datetime
 
-# -----------------------------------------------------------------------------
-# Node Main 
-class NodeMain(Node):
-    node_name               = 'main'
+class Node(models.Model):
+    """A simple hierarchical node model"""
+
+    CHOICES_BEHAVIOUR = (
+        ('list', 'always list'), 
+        ('item', 'always item'),
+        ('node', 'always node'),
+    )
+
+    CHOICES_FILTER = (
+        ('date_req', 'required date_start'),
+    )
+
+    CHOICES_FILTER_DATE = (
+        ('date_actual',         'actual (date_start < date)'),
+        ('date_actual_both',    'actual (date_start < date < date_end)'),
+        ('date_anounce',        'anounce (date < date_end)'),
+    )
+
+    FILTER_HANDLER = {
+        'date_req':             lambda q: q & models.Q(date_start__isnull=False),
+        'date_actual':          lambda q: q & models.Q(models.Q(date_start__lte=datetime.datetime.now()) | models.Q(date_start__isnull=True)),
+        'date_actual_both':     lambda q: q & models.Q(models.Q(date_start__lte=datetime.datetime.now()) | models.Q(date_start__isnull=True), models.Q(date_end__gte=datetime.datetime.now()) | models.Q(date_end__isnull=True)),
+        'date_anounce':         lambda q: q & models.Q(date_start__gte=datetime.datetime.now()),
+    }
+
+    # fields start
+    # data
+    name                = models.CharField(_("name"), max_length=2000)
+    text                = models.TextField(_("detail text"), max_length=200000, blank=True, null=True)
+
+    active              = models.BooleanField(_("is active"), default=True)
+    login_required      = models.BooleanField(_("login required"), default=False)
+
+    # path
+    slug                = models.SlugField(_("slug"), max_length=255, db_index=True)
+    path                = models.CharField(_("path"), max_length=255, db_index=True, blank=True, null=True, editable=False)
+    link                = models.CharField(_("link"), max_length=255, db_index=True, blank=True, null=True, help_text=_("overwrite the path to this node (if leading slashes ('/some/url/') - node is only link in menu, else ('some/url') - standart behaviour)"))
+
+    # seo
+    meta_description    = models.TextField(_("meta description"), max_length=1000, blank=True, null=True)
+    meta_keywords       = models.CharField(_("meta keywords"), max_length=255, blank=True, null=True)
+    meta_title          = models.CharField(_("meta title"), max_length=255, blank=True, null=True, help_text=_("overwrite the title (html title tag)"))
+
+    # relations
+    site                = models.ForeignKey(Site, help_text=_('The site the page is accessible at.'), verbose_name=_("site"), default=1)
+    parent              = models.ForeignKey('self', null=True, blank=True, related_name='children', db_index=True)
+
+    # stat info
+    date_create         = models.DateTimeField(editable=False, auto_now_add=True)
+    date_update         = models.DateTimeField(editable=False, auto_now=True)
+
+    # behaviour
+    behaviour           = models.CharField(_("list behaviour"), max_length=20, choices=CHOICES_BEHAVIOUR,   null=True, blank=True)
+    filter              = models.CharField(_("filter"),         max_length=20, choices=CHOICES_FILTER,      null=True, blank=True)
+    filter_date         = models.CharField(_("filter_date"),    max_length=20, choices=CHOICES_FILTER_DATE, null=True, blank=True)
+
+    template            = models.CharField(_("template"), max_length=100, null=True, blank=True, help_text=_('the template used to render the content instead original'))
+    view                = models.CharField(_("view"), max_length=100, null=True, blank=True, help_text=_('the view loaded instead original'))
+    order_by            = models.CharField(_("sort"), max_length=100, null=True, blank=True, help_text=_('overwrite default ordering (-date_start -sort, separate strongly with one space char)'))
+    onpage              = models.PositiveSmallIntegerField(_("onpage"), default=10, help_text=_('perpage count (default=10, 1<=count<=999)'))
+
+    # menu
+    menu_title          = models.CharField(_("menu title"), max_length=255, blank=True, null=True, help_text=_("overwrite the title in the menu"))
+    menu_extender       = models.CharField(_("attached menu"), max_length=80, db_index=True, blank=True, null=True, help_text=_("menu extender"))
+    menu_in             = models.BooleanField(_("in navigation"), default=True, db_index=True, help_text=_("this node in navigation"))
+    menu_in_chain       = models.BooleanField(_("in chain and title"), default=True, db_index=True, help_text=_("this node in chain and title"))
+    menu_jump           = models.BooleanField(_("jump to first child"), default=False, help_text=_("jump to the first child element if exist"))
+    menu_login_required = models.BooleanField(_("menu login required"), default=False, help_text=_("only show this page in the menu if the user is logged in"))
+    menu_show_current   = models.BooleanField(_("show node name"), default=True, help_text=_('show node name in h1 tag if current'))
+
+    # tree
+    level               = models.PositiveIntegerField(db_index=True, editable=False)
+    lft                 = models.PositiveIntegerField(db_index=True, editable=False)
+    rght                = models.PositiveIntegerField(db_index=True, editable=False)
+    tree_id             = models.PositiveIntegerField(db_index=True, editable=False)
+    # fields end
 
     class Meta:
-        verbose_name        = _('main node')
-        verbose_name_plural = _('main nodes')
-        ordering            = ['tree_id', 'lft']
+        verbose_name        = _('node')
+        verbose_name_plural = _('nodes')
+        ordering = ['tree_id', 'lft']
+        abstract = True
 
-class ItemMain(Item):
-    node_name               = 'main'
-    node                    = models.ForeignKey(NodeMain, help_text=_('Parent node.'), related_name='item_set')
-    image                   = AdvancedImageWithThumbnailsField(
-                                _('Image'), blank=True, null=True, upload_to="upload/nodes/main/images/item/%Y/%m/",
-                                max_width=800, max_height=600, max_quality=90, clearable=True,
-                                thumbnail={'size': (70, 70), 'options': ('crop', 'upscale'),},
-                                extra_thumbnails={'main': {'size': (150, 150), 'options': ('crop', 'upscale')}},
-                            )
+    def __unicode__(self):
+        return self.name
+
+    def save(self, is_moved=False, *args, **kwargs):
+        """Update path variable"""
+        is_create = self.pk is None
+        # check slug modification
+        if not (is_moved or is_create):
+            original = self.__class__.objects.get(pk=self.pk)
+            is_moved = (self.slug != original.slug) or (self.parent_id != original.parent_id)
+        # get path value
+        if is_moved or is_create:
+            self.path = self.parent.get_path().strip('/') if self.parent else ''
+        super(Node, self).save(*args, **kwargs)
+        # cascade children path updating
+        if is_moved:
+            for item in self.children.all():
+                item.save(is_moved=True)
+
+    def get_filter(self, filter=None):
+        node_f  = self.filter      and self.FILTER_HANDLER.get(self.filter, None)
+        node_fd = self.filter_date and self.FILTER_HANDLER.get(self.filter_date, None)
+        filter  = models.Q() if filter is None else filter
+        filter  = node_f(filter)  if callable(node_f)  else filter
+        filter  = node_fd(filter) if callable(node_fd) else filter
+        return filter
+
+    def get_order_by(self, default=None):
+        fields      = [i.name for i in self.item_set.model._meta.fields]
+        order_by    = [i for i in self.order_by.split(' ') if i.replace('-', '', 1) in fields] if self.order_by else []
+        order_by    = order_by or default
+        return order_by
+    
+    def get_path(self):
+        return ('%s/' % self.path if self.path else '') + self.slug
+
+    def get_link_or_path(self):
+        return self.link.strip('/') if self.link else self.get_path()
+
+    def get_absolute_url(self):
+        if self.link and (self.link.startswith('/') or ('://' in self.link and self.link[0:self.link.index('://')].isalpha())):
+            return self.link
+        path = self.link or self.get_path()
+        path = path.strip('/')
+        return reverse('nodes_%s' % self.node_name, kwargs={'path':path})
+
+    def get_menu_title(self):
+        return self.menu_title or self.name
+
+class Item(models.Model):
+    """A simple node's item model"""
+
+    # fields start
+    # data
+    active              = models.BooleanField(_("is active"), default=True)
+    date_start          = models.DateTimeField(_("start date"), blank=True, null=True, db_index=True)
+    date_end            = models.DateTimeField(_("end date"), blank=True, null=True, db_index=True)
+    sort                = models.IntegerField(_("sort"), default=500)
+    name                = models.CharField(_("name"), max_length=2000)
+    descr               = models.TextField(_("previev text"), max_length=20000, blank=True, null=True)
+    text                = models.TextField(_("detail text"), max_length=200000, blank=True, null=True)
+
+    # path
+    slug                = models.SlugField(_("slug"), max_length=255, db_index=True)
+    link                = models.CharField(_("link"), max_length=255, db_index=True, blank=True, null=True)
+
+    # seo
+    meta_description    = models.TextField(_("meta description"), max_length=1000, blank=True, null=True)
+    meta_keywords       = models.CharField(_("meta keywords"), max_length=255, blank=True, null=True)
+    meta_title          = models.CharField(_("meta title"), max_length=255, blank=True, null=True, help_text=_("overwrite the title (html title tag)"))
+
+    # stat info
+    date_create         = models.DateTimeField(editable=False, auto_now_add=True)
+    date_update         = models.DateTimeField(editable=False, auto_now=True)
+
+    # behaviour
+    template            = models.CharField(_("template"), max_length=100, null=True, blank=True, help_text=_('template to render the content instead original'))
+    view                = models.CharField(_("view"), max_length=100, null=True, blank=True, help_text=_('alternative view for item detail view'))
+    visible             = models.BooleanField(_("visible"), default=True, help_text=_('show item in items list, also redirect if alone'))
+    show_item_name      = models.BooleanField(_("show item name"), default=True, help_text=_('show item name (usually in h2 tag)'))
+    show_node_link      = models.BooleanField(_("show link to node"), default=True, help_text=_('show link to parent node'))
+    show_in_meta        = models.BooleanField(_("show in meta"), default=True, help_text=_('show item name in meta title and chain'))
+    # fields end
 
     class Meta:
-        verbose_name        = _('main item')
-        verbose_name_plural = _('main items')
-        ordering            = ['-date_start', '-sort']
+        verbose_name        = _('item')
+        verbose_name_plural = _('items')
+        ordering = ['-date_start', '-sort']
+        abstract = True
 
-    def image_tag(self):
-        return self.image.thumbnail_tag if self.image else ''
-    image_tag.short_description = _('Image')
-    image_tag.allow_tags = True
-
-class ItemImageMain(models.Model):
-    node_name               = 'main'
-    item                    = models.ForeignKey(ItemMain, help_text=_('Parent item.'), related_name='image_set')
-    name                    = models.CharField(max_length=200, blank=True, null=True)
-    sort                    = models.IntegerField(default=500)
-    image                   = AdvancedImageWithThumbnailsField(
-                                _('Image'), blank=True, upload_to="upload/nodes/main/images/itemimage/%Y/%m/",
-                                max_width=800, max_height=600, max_quality=90, clearable=True,
-                                thumbnail={'size': (70, 70), 'options': ('crop', 'upscale')},
-                                extra_thumbnails={'main': {'size': (150, 150), 'options': ('crop', 'upscale')}},
-                            )
-
-    class Meta:
-        verbose_name        = _('main item image')
-        verbose_name_plural = _('main item images')
-        ordering            = ['-sort']
+    def __unicode__(self):
+        return self.name
         
-    def image_tag(self):
-        return self.image.thumbnail_tag if self.image else ''
-    image_tag.short_description = _('Image')
-    image_tag.allow_tags = True
+    def get_absolute_url(self, use_link=True):
+        if use_link and self.link:
+            link = self.link
+        else:
+            data = {'path': self.node.get_link_or_path().strip('/').__str__(), '_0': 'i/%s/' % self.slug}
+            link = reverse('nodes_%s' % self.node_name, kwargs=data)
+        return link
         
-# register all mptt classes
-mptt.register(NodeMain)
+    def get_absolute_url_real(self):
+        return self.get_absolute_url(use_link=False)

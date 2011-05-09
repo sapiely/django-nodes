@@ -16,7 +16,7 @@ class MenuPool(object):
         if self.discovered: return
         for app in settings.MENUS_APPS:
             __import__(app, {}, {}, ['menu'])
-        from menus.modifiers import register
+        from modifiers import register
         register()
         self.discovered = True
 
@@ -39,14 +39,14 @@ class MenuPool(object):
         self.cache_keys.difference_update(to_be_deleted)
 
     def register_menu(self, menu):
-        from menus.base import Menu
+        from base import Menu
         assert issubclass(menu, Menu)
         if menu.__name__ in self.menus.keys():
             raise NamespaceAllreadyRegistered, "[%s] a menu with this name is already registered" % menu.__name__
         self.menus[menu.__name__] = menu()
 
     def register_modifier(self, modifier_class):
-        from menus.base import Modifier
+        from base import Modifier
         assert issubclass(modifier_class, Modifier)
         if not modifier_class in self.modifiers:
             self.modifiers.append(modifier_class)

@@ -1,6 +1,6 @@
 from django.conf import settings
-from menus.base import Modifier
-from menus.menu_pool import menu_pool
+from base import Modifier
+from menu_pool import menu_pool
 
 class Namespace(Modifier):
     """fetch nodes by namespace"""

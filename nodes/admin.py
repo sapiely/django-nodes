@@ -1,25 +1,95 @@
 from django.contrib import admin
-from system.node_admin import NodeAdmin
-from system.item_admin import ItemAdmin
-from sakkada.admin.editors.tinymce import EditorAdmin
-from models import NodeMain, ItemMain, ItemImageMain
+from django.core.urlresolvers import reverse
+from django.utils.translation import ugettext_lazy as _
+from sakkada.admin.fkey_in import FkeyInAdmin, FkeyInMpttAdmin, fkey_in_link
+from sakkada.admin.fein.tree_editor import TreeEditor
+from sakkada.admin.fein.list_editor import ListEditor
+from sakkada.admin.fein.meta_editor import ajax_editable_boolean
 
-# -----------------------------------------------------------------------------
-# Main admin
+class NodeAdmin(TreeEditor, FkeyInMpttAdmin, admin.ModelAdmin):
+    list_display = (
+        'name', 'id', 'slug', 'level',
+        'toggle_active', 'toggle_menu_in', 'toggle_menu_in_chain', 'toggle_menu_jump', 'toggle_menu_login', 'toggle_menu_current', 
+        'item_link', 'node_link', 
+    )
 
-# Node main admin
-class NodeMainAdmin(EditorAdmin, NodeAdmin):
-    tinymce_fields = ['text']
+    ordering = ['site', 'tree_id', 'lft']
+    list_filter = ['level']
+    prepopulated_fields = {'slug': ('name',)}
+    fieldsets = (
+            (None, {
+                'fields': ('name', 'active', 'text')
+            }),
+            (_('path and relation settings'), {
+                'classes': ('collapse',),
+                'fields': ('slug', 'link', 'parent', 'site',)
+            }),
+            (_('menu settings'), {
+                'classes': ('collapse',),
+                'fields': ('menu_title', 'menu_extender', 'menu_in', 'menu_in_chain', 'menu_jump', 'menu_login_required', 'menu_show_current')
+            }),
+            (_('meta settings'), {
+                'classes': ('collapse',),
+                'fields': ('meta_title', 'meta_keywords', 'meta_description',)
+            }),
+            (_('behaviour settings'), {
+                'classes': ('collapse',),
+                'fields': ('behaviour', 'filter', 'filter_date', 'template', 'view', 'order_by', 'onpage')
+            }),
+        )
 
-# Item main admin
-class ItemImageMainInline(admin.TabularInline):
-    model = ItemImageMain
-    classes = ['collapse']
-    extra = 3
+    toggle_active           = ajax_editable_boolean('active', 'active?')
+    toggle_menu_in          = ajax_editable_boolean('menu_in', 'menu in?')
+    toggle_menu_in_chain    = ajax_editable_boolean('menu_in_chain', 'chain in?')
+    toggle_menu_jump        = ajax_editable_boolean('menu_jump', 'jump?')
+    toggle_menu_login       = ajax_editable_boolean('menu_login_required', 'login?')
+    toggle_menu_current     = ajax_editable_boolean('menu_show_current', 'h1 title?')
+    
+    item_link = fkey_in_link('item', model_set='item_set',  fkey_name='node',   with_add_link=True)
+    node_link = fkey_in_link('node', model_set='children',  fkey_name='parent', with_add_link=True)
 
-class ItemMainAdmin(EditorAdmin, ItemAdmin):
-    inlines = [ItemImageMainInline]
-    tinymce_fields = ['descr', 'text']
+    def get_form(self, request, obj=None, **kwargs):
+        form = super(NodeAdmin, self).get_form(request, obj=None, **kwargs)
+        # indent tree node titles
+        form.base_fields['parent'].label_from_instance = lambda obj: u'%s %s' % ('. ' * obj.level, obj)
+        return form
 
-admin.site.register(NodeMain, NodeMainAdmin)
-admin.site.register(ItemMain, ItemMainAdmin)
+class ItemAdmin(ListEditor, FkeyInAdmin, admin.ModelAdmin):
+    list_display = (
+        'name', 'id', 'slug', 'image_tag',
+        'toggle_active', 'toggle_visible', 'toggle_show_item_name', 'toggle_show_node_link', 'toggle_show_in_meta', 
+    )
+
+    ordering = ['-sort']
+    list_filter = ['node', 'date_create']
+    search_fields = ['name']
+    prepopulated_fields = {'slug': ('name',)}
+    fieldsets = (
+            (None, {
+                'fields': ('active', 'date_start', 'date_end', 'name', 'sort', 'descr', 'text', 'image')
+            }),
+            (_('path and node settings'), {
+                'classes': ('collapse',),
+                'fields': ('slug', 'link', 'node',)
+            }),
+            (_('meta settings'), {
+                'classes': ('collapse',),
+                'fields': ('meta_title', 'meta_keywords', 'meta_description',)
+            }),
+            (_('behaviour settings'), {
+                'classes': ('collapse',),
+                'fields': ('template', 'view', 'visible', 'show_item_name', 'show_node_link', 'show_in_meta',)
+            }),
+        )
+    
+    toggle_active           = ajax_editable_boolean('active', 'active?')
+    toggle_visible          = ajax_editable_boolean('visible', 'visible?')
+    toggle_show_item_name   = ajax_editable_boolean('show_item_name', 'name?')
+    toggle_show_node_link   = ajax_editable_boolean('show_node_link', 'to list?')
+    toggle_show_in_meta     = ajax_editable_boolean('show_in_meta', 'meta?')
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super(ItemAdmin, self).get_form(request, obj=None, **kwargs)
+        # indent tree node titles
+        form.base_fields['node'].label_from_instance = lambda obj: u'%s %s' % ('. ' * obj.level, obj)
+        return form

@@ -1,0 +1,4 @@
+in all files change 
+    {% extends "admin/change_list.html" %}
+to
+    {% extends "admin/nodes/change_list.html" %}
