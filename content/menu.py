@@ -1,4 +1,4 @@
-from nodes.menus.menu_pool import menu_pool
+from menus.menu_pool import menu_pool
 from nodes.menu import NodeMenu
 from models import NodeMain
 

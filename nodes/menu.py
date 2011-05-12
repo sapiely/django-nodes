@@ -1,6 +1,6 @@
 from django.contrib.sites.models import Site
-from nodes.menus.base import Menu, NavigationNode, Modifier
-from nodes.menus.menu_pool import menu_pool
+from menus.base import Menu, NavigationNode, Modifier
+from menus.menu_pool import menu_pool
 
 def page_to_node(node):
     attr = {
