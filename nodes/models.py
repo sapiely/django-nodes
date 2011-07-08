@@ -63,7 +63,7 @@ class Node(models.Model):
 
     template            = models.CharField(_("template"), max_length=100, null=True, blank=True, help_text=_('the template used to render the content instead original'))
     view                = models.CharField(_("view"), max_length=100, null=True, blank=True, help_text=_('the view loaded instead original'))
-    order_by            = models.CharField(_("sort"), max_length=100, null=True, blank=True, help_text=_('overwrite default ordering (-date_start -sort, separate strongly with one space char)'))
+    order_by            = models.CharField(_("ordering"), max_length=100, null=True, blank=True, help_text=_('overwrite default ordering (default is empty, equal to -date_start -sort, separate strongly with one space char)<br>possible keys: date_start, date_end, sort, name, slug, link'))
     onpage              = models.PositiveSmallIntegerField(_("onpage"), default=10, help_text=_('perpage count (default=10, 1<=count<=999)'))
 
     # menu
@@ -147,7 +147,7 @@ class Item(models.Model):
     date_end            = models.DateTimeField(_("end date"), blank=True, null=True, db_index=True)
     sort                = models.IntegerField(_("sort"), default=500)
     name                = models.CharField(_("name"), max_length=2000)
-    descr               = models.TextField(_("previev text"), max_length=20000, blank=True, null=True)
+    descr               = models.TextField(_("preview text"), max_length=20000, blank=True, null=True)
     text                = models.TextField(_("detail text"), max_length=200000, blank=True, null=True)
 
     # path
