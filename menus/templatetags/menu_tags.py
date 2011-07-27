@@ -6,7 +6,7 @@ from menus.template import simple_tag_ex, inclusion_tag_ex, get_from_context
 from menus.menu_pool import menu_pool
 
 def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100, 
-                template="menus/menu.html", namespace=None, root_id=None, show_unvisible=False):
+               template="menus/menu.html", namespace=None, root_id=None, show_unvisible=False):
     """
     render a nested list of all children of the pages
     - from_level: starting level
@@ -41,9 +41,10 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
                     'namespace':namespace})
     return context
 
-def show_menu_below_id(context, root_id=None, from_level=0, to_level=100, extra_inactive=100, extra_active=100, template_file="menus/menu.html", namespace=None):
+def show_menu_below_id(context, root_id=None, from_level=0, to_level=100, extra_inactive=100, extra_active=100, 
+                        template="menus/menu.html", namespace=None):
     """displays a menu below a node that has an uid"""
-    return show_menu(context, from_level, to_level, extra_inactive, extra_active, template_file, root_id=root_id, namespace=namespace)
+    return show_menu(context, from_level, to_level, extra_inactive, extra_active, template, root_id=root_id, namespace=namespace)
 
 def show_sub_menu(context, levels=100, template="menus/sub_menu.html"):
     """
@@ -114,33 +115,35 @@ def nodes_in_root(nodes, root_id, from_level):
     id_nodes = menu_pool.get_nodes_by_attribute(nodes, "reverse_id", root_id)
     if id_nodes:
         new_nodes = nodes_after_node(id_nodes[0], [], unparent=True)
-        # set from_level to level of root (important in cut_levels)
-        from_level = id_nodes[0].level
+        # set from_level to next level after root (important in cut_levels)
+        from_level = id_nodes[0].level + 1
     return new_nodes, from_level
 
 def cut_after(node, levels, removed):
     """given a tree of nodes cuts after N levels"""
     if levels == 0:
         for n in node.children:
-            removed.append(n)
-            cut_after(n, 0, removed)
+            removed.__setitem__(n.id, None)
+            n.children and cut_after(n, 0, removed)
         node.children = []
     else:
         for n in node.children:
-            cut_after(n, levels-1, removed)
+            n.children and cut_after(n, levels-1, removed)
 
 def remove(node, removed):
     """remove node"""
-    removed.append(node)
-    if node.parent:
-        if node in node.parent.children:
-            node.parent.children.remove(node)
+    removed.__setitem__(node.id, None)
+    if node.parent and node in node.parent.children:
+        node.parent.children.remove(node)
+    node.children and cut_after(node, 0, removed)
 
 def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_unvisible=False):
     """cutting nodes away from menus"""
-    final, removed, selected, in_branch = [], [], None, False
+    final, removed, selected, in_branch = [], {}, None, False
     from_gt_root = nodes[0].level < from_level
     for node in nodes:
+        # ignore nodes, which already in removed dict
+        if node.id in removed: continue
         # check only selected branch if from_level > level of root nodes
         if from_gt_root:
             if not in_branch and node.level+1 == from_level:
@@ -159,7 +162,7 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_u
             node.parent = None
         # cut inactive nodes to extra_inactive, but not of descendants of the selected node
         if not node.ancestor and not node.selected and not node.descendant:
-            cut_after(node, extra_inactive, removed)
+            node.children and cut_after(node, extra_inactive, removed)
         # remove nodes that are too deep
         if node.level > to_level and node.parent:
             remove(node, removed)
@@ -169,11 +172,12 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_u
             # cut_after(node, 0, removed) # may be
             remove(node, removed)
     if selected:
-        cut_after(selected, extra_active, removed)
+        node.children and cut_after(selected, extra_active, removed)
     if removed:
-        for node in removed:
-            if node in final:
-                final.remove(node)
+        ftemp, final = final, []
+        for node in ftemp:
+            if node.id in removed: continue
+            final.append(node)
     return final
 
 def load_menu(parser, token):
