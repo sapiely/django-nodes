@@ -93,9 +93,9 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         if node.level == from_level:
             final.append(node)
             node.parent = None
-        # cut inactive nodes to extra_inactive (nodes in not active branch)
-        if root_level == node.level and not any((node.ancestor, node.selected, node.descendant)):
-            node.children and cut_after(node, extra_inactive, removed)
+            # cut inactive nodes to extra_inactive (nodes in not active branch)
+            if not (node.selected or node.ancestor or node.descendant):
+                node.children and cut_after(node, extra_inactive, removed)
         # remove nodes that are too deep
         if node.level > to_level:
             remove(node, removed)
