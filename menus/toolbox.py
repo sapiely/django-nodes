@@ -22,3 +22,16 @@ def cache_key_tool(lang, site_id, request, key=None):
     cache_name = getattr(settings, 'MENUS_CACHE_NAME', None)
     cache_name = 'menus_%s_%s_%s' % (lang, site_id, cache_name(request) if callable(cache_name) else 'key')
     return cache_name
+
+# import module by import_path
+def import_path(import_path, alternate=None):
+    from django.utils.importlib import import_module
+    try:
+        module_name, value_name = import_path.rsplit('.', 1)
+        module = import_module(module_name)
+        value_name = getattr(module, value_name)
+    except ImportError:
+        value_name = alternate
+    except AttributeError:
+        value_name = alternate
+    return value_name

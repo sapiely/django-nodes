@@ -4,20 +4,21 @@ from django.utils.encoding import smart_str
 
 class Menu(object):
     """blank menu class"""
-    namespace = None
+    namespace, index = None, 500
     def __init__(self):
         if not self.namespace:
             self.namespace = self.__class__.__name__
     def get_nodes(self, request):
-        """should return a list of NavigationNode instances""" 
+        """should return a list of NavigationNode instances"""
         raise NotImplementedError
-    
+
 class Modifier(object):
     """blank modifier class"""
-    modify_once = False
-    def modify(self, request, nodes, namespace, id, post_cut):
-        pass
-        
+    modify_rule = 'every_time'
+
+    def modify(self, request, nodes, namespace, id, post_cut, meta):
+        raise NotImplementedError
+
     def remove_children(self, node, nodes):
         for n in node.children:
             nodes.remove(n)
@@ -29,9 +30,22 @@ class Modifier(object):
             node.parent.children.remove(node)
         nodes.remove(node)
         self.remove_children(node, nodes)
-    
+
+    def resort_nodes(self, data):
+        nodes = []
+        def set_children(node, nodes):
+            if not node.children: return
+            for n in node.children:
+                nodes.append(n)
+                set_children(n, nodes)
+        for node in data:
+            if not node.parent:
+                nodes.append(node)
+                set_children(node, nodes)
+        return nodes
+
 class NavigationNode(object):
-    """blank modifier class"""
+    """navigation node class"""
 
     title               = None
     url                 = None
@@ -44,13 +58,14 @@ class NavigationNode(object):
 
     parent              = None # do not touch
     namespace           = None
-    
+
     meta_title          = None
     meta_keywords       = None
     meta_description    = None
 
-    def __init__(self, title, url, id, parent_id=None, visible=True, attr=None, 
-                    visible_chain=True, meta_title='', meta_keywords='', meta_description=''):
+    def __init__(self, title, url, id, parent_id=None, attr=None,
+                  visible=True, visible_chain=True,
+                   meta_title='', meta_keywords='', meta_description=''):
         self.children           = [] # do not touch
         self.title              = title
         self.url                = url
@@ -62,10 +77,10 @@ class NavigationNode(object):
         self.meta_keywords      = meta_keywords
         self.meta_description   = meta_description
         if attr: self.attr = attr
-    
+
     def __repr__(self):
         return "<Navigation Node: %s>" % smart_str(self.title)
-    
+
     def get_descendants(self):
         nodes = []
         for node in self.children:

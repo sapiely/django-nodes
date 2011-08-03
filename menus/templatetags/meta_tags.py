@@ -18,7 +18,7 @@ def show_meta_chain(context, main_title='', main_url='/', start_level=0, templat
     - main_title: title of the first breadcrumb (if empty, will be ignored with main_url)
     - main_url: url of the first breadcrumb, if main_title (see below)
     - start_level: after which level should the breadcrumb start? 0=home
-    - template: template used to render the breadcrumb 
+    - template: template used to render the breadcrumb
     """
     request = get_from_context(context, 'request')
     chain   = [{'name':main_title, 'link':main_url}] if main_title else []
@@ -52,7 +52,7 @@ def show_meta_description(context, main_description='', with_tag=False):
     description     = ''.join([(' %s' % i.encode('utf8') if i else '') for i in description]).strip()
     description     = '<meta name="description" content="%s" />' % description if description and with_tag else description
     return description
-    
+
 register = template.Library()
 simple_tag_ex(register, show_meta_current, takes_context=True)
 simple_tag_ex(register, show_meta_keywords, takes_context=True)

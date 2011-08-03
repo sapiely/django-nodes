@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.cache import cache
 from django.utils.translation import get_language
-from toolbox import NamespaceAllreadyRegistered, meta_to_request, cache_key_tool
+from toolbox import NamespaceAllreadyRegistered, meta_to_request, cache_key_tool, import_path
 import copy
 
 class MenuPool(object):
@@ -16,9 +16,12 @@ class MenuPool(object):
         if self.discovered: return
         for app in settings.MENUS_APPS:
             __import__(app, {}, {}, ['menu'])
-        from modifiers import register
-        register()
         self.discovered = True
+        # register modifiers
+        from modifiers import register
+        callback = getattr(settings, 'MENUS_MODIFIERS_REG', None)
+        callback = callback and import_path(callback) or register
+        callback()
 
     def clear(self, site_id=None, language=None):
         """clear cache data"""
@@ -42,7 +45,7 @@ class MenuPool(object):
         from base import Menu
         assert issubclass(menu, Menu)
         if menu.__name__ in self.menus.keys():
-            raise NamespaceAllreadyRegistered, "[%s] a menu with this name is already registered" % menu.__name__
+            raise NamespaceAllreadyRegistered, '[%s] a menu with this name is already registered' % menu.__name__
         self.menus[menu.__name__] = menu()
 
     def register_modifier(self, modifier_class):
@@ -51,118 +54,139 @@ class MenuPool(object):
         if not modifier_class in self.modifiers:
             self.modifiers.append(modifier_class)
 
-    def get_nodes(self, request, namespace=None, root_id=None, site_id=None, breadcrumb=False):
+    def unregister_modifier(self, modifier_class):
+        from base import Modifier
+        assert issubclass(modifier_class, Modifier)
+        if modifier_class in self.modifiers:
+            self.modifiers.remove(modifier_class)
 
+    def clear_modifiers(self):
+        self.modifiers = []
+
+    def get_nodes(self, request, namespace=None, root_id=None, site_id=None, init_only=False):
         # prepare request
         meta_to_request(request)
-        
+
         # cache marked menu while request
         if hasattr(request.meta, '_nodes'):
             nodes = request.meta._nodes
         else:
             # also cachable, but between requests
-            # remark (second _mark_selected) required after some modifiers (LoginRequired)
             self.discover_menus()
-            site_id = site_id if site_id else Site.objects.get_current().pk
-            cache_key = cache_key_tool(get_language(), site_id, request)
-            nodes = self._build_nodes(request, cache_key)
-            nodes = copy.deepcopy(nodes)
-            nodes = self._mark_selected(request, nodes)
-            nodes = self.apply_modifiers(nodes, request, modify_once=True)
+
+            # cached nodes list selection
+            cache_key = cache_key_tool(get_language(), site_id or Site.objects.get_current().pk, request)
+            self.cache_keys.add(cache_key)
+            nodes = cache.get(cache_key, None)
+            if not nodes:
+                nodes = self._build_nodes(request)
+                nodes = self.apply_modifiers(nodes, request, modify_rule='once')
+                cache.set(cache_key, nodes, settings.MENUS_CACHE_DURATION)
+
+            nodes = self.apply_modifiers(nodes, request, modify_rule='per_request')
             nodes = self._mark_selected(request, nodes)
             nodes = self._mark_anc_des_sib_flags(nodes)
-            request.meta._nodes = nodes
             self._storage_trigger(request, nodes)
+            request.meta._nodes = nodes
+            if init_only: return
 
-        nodes = copy.deepcopy(nodes)
-        nodes = self.apply_modifiers(nodes, request, namespace, root_id, post_cut=False, breadcrumb=breadcrumb)
+        nodes, meta = copy.deepcopy(nodes), None
+        if root_id:
+            nodes, meta = self._nodes_in_root(nodes, root_id), {'modified_ancestors': True}
+        return self.apply_modifiers(nodes, request, namespace, root_id, post_cut=False, meta=meta)
 
-        return nodes
-
-    def apply_modifiers(self, nodes, request, namespace=None, root_id=None, post_cut=False, breadcrumb=False, modify_once=False):
+    def apply_modifiers(self, nodes, request, namespace=None, root_id=None, post_cut=False, meta=None, modify_rule='every_time'):
+        meta, meta['modify_rule'] = meta or {}, modify_rule
         for cls in self.modifiers:
-            if bool(modify_once) != bool(cls.modify_once): continue
-            nodes = cls().modify(request, nodes, namespace, root_id, post_cut, breadcrumb)
+            if not modify_rule in cls.modify_rule: continue
+            nodes = cls().modify(request, nodes, namespace, root_id, post_cut, meta)
         return nodes
-
-    def get_menus_by_attribute(self, name, value):
-        self.discover_menus()
-        found = []
-        for menu in self.menus.items():
-            if hasattr(menu[1], name) and getattr(menu[1], name, None) == value:
-                found.append((menu[0], menu[1].name))
-        return found
 
     def get_nodes_by_attribute(self, nodes, name, value):
         found = []
         for node in nodes:
-            if node.attr.get(name, None) == value:
-                found.append(node)
+            node.attr.get(name, None) == value and found.append(node)
         return found
 
-    def _build_nodes(self, request, cache_key):
-        """
-        build full nodes array (linear) with parent links
-        cachable operation
-        call from menu_pool.get_nodes
-        """
-        self.cache_keys.add(cache_key)
-        cached_nodes = cache.get(cache_key, None)
-        if cached_nodes: return cached_nodes
+    def _nodes_in_root(self, nodes, root_id):
+        """get nodes in node with reverse_id == root_id"""
+        new_nodes = []
+        id_nodes = self.get_nodes_by_attribute(nodes, 'reverse_id', root_id)
+        if id_nodes:
+            new_nodes = self._nodes_after_node(id_nodes[0], [], unparent=True)
+        return new_nodes
 
-        final_nodes = []
-        for ns in self.menus:
-            try:
-                nodes = self.menus[ns].get_nodes(request)
-            except:
-                raise
-            last = None
+    def _nodes_after_node(self, node, result, unparent=False):
+        if not node.children:
+            return result
+        for n in node.children:
+            result.append(n)
+            if unparent:
+                n.parent = None
+            if n.children:
+                result = self._nodes_after_node(n, result)
+        return result
+
+    def _build_nodes(self, request):
+        """build full nodes array (linear) with parent links"""
+        final_nodes, ignored_nodes = {'ids':{}, 'nodes':[]}, {}
+
+        # sort node by index attr desc
+        menus = self.menus.values()
+        menus = sorted(menus, cmp=lambda x,y: cmp(x.index, y.index), reverse=True)
+        # fetch all nodes from all menus
+        for menu in menus:
+            nodes, last = menu.get_nodes(request), None
             for node in nodes:
-                if not node.namespace:
-                    node.namespace = ns
+                # set namespace (menu class name)
+                node.namespace = node.namespace or menu.namespace
+                # ignore nodes with dublicated ids
+                if final_nodes['ids'].get(node.id, None) == node.namespace:
+                    continue
                 if node.parent_id:
                     found = False
+                    # ignore node if parent also ignored
+                    if ignored_nodes.get(node.parent_id, None) == node.namespace:
+                        ignored_nodes[node.id] = node.namespace
+                        continue
+                    # try to find parent in ancestors chain (optimization)
                     if last:
                         n = last
                         while n:
                             if n.namespace == node.namespace and n.id == node.parent_id:
-                                node.parent = n
-                                found = True
-                                n = None
-                            elif n.parent:
-                                n = n.parent
+                                node.parent, found, n = n, True, None
                             else:
-                                n = None
+                                n = n.parent or None
+                    # search parent directrly
                     if not found:
                         for n in nodes:
                             if n.namespace == node.namespace and n.id == node.parent_id:
-                                node.parent = n
-                                found = True
+                                node.parent, found = n, True
+                    # if parent is found - append node to "brothers"
                     if found:
                         node.parent.children.append(node)
                     else:
+                        ignored_nodes[node.id] = node.namespace
                         continue
-                final_nodes.append(node)
+                # append node and it is to main list
+                final_nodes['nodes'].append(node)
+                final_nodes['ids'][node.id] = node.namespace
+                # last node for search in ancestors
                 last = node
-        cache.set(cache_key, final_nodes, settings.MENUS_CACHE_DURATION)
 
+        # reindex ids in nodes array
+        final_nodes, i = final_nodes['nodes'], 1
+        for node in final_nodes:
+            node.id, node.parent_id, i = i, node.parent and node.parent.id, i+1
+            node.sibling, node.ancestor, node.descendant, node.selected = (False,)*4
         return final_nodes
 
     def _mark_selected(self, request, nodes):
         """mark current node as selected"""
         sel = None
         for node in nodes:
-            node.sibling = False
-            node.ancestor = False
-            node.descendant = False
-            node.selected = False
-
             if node.url == request.path[:len(node.url)]:
-                if sel:
-                    if len(node.url) >= len(sel.url):
-                        sel = node
-                else:
-                    sel = node
+                sel = node if not sel or (len(node.url) >= len(sel.url)) else sel
             else:
                 node.selected = False
         if sel:
@@ -172,57 +196,40 @@ class MenuPool(object):
     def _mark_anc_des_sib_flags(self, nodes):
         """
         searches the current selected node and marks them.
-        current_node: selected = True
+        current: selected = True
         siblings: sibling = True
         descendants: descendant = True
         ancestors: ancestor = True
-        (become from modifier)
         """
-        selected = None
-        root_nodes = []
+        selected, root_nodes = None, []
         for node in nodes:
-            if not hasattr(node, "descendant"):
-                node.descendant = False
-            if not hasattr(node, "ancestor"):
-                node.ancestor = False
-            if not node.parent:
-                if selected and not selected.parent:
-                    node.sibling = True
-                root_nodes.append(node)
+            node.is_leaf_node = not node.children
+            node.parent or root_nodes.append(node)
             if node.selected:
+                selected = node
                 if node.parent:
                     n = node
                     while n.parent:
                         n = n.parent
                         n.ancestor = True
                     for sibling in node.parent.children:
-                        if not sibling.selected:
-                            sibling.sibling = True
-                else:
-                    for n in root_nodes:
-                        if not n.selected:
-                            n.sibling = True
+                        sibling.sibling = not sibling.selected
                 if node.children:
                     self._mark_descendants(node.children)
-                selected = node
-            if node.children:
-                node.is_leaf_node = False
-            else:
-                node.is_leaf_node = True
+        if selected and not selected.parent:
+            for n in root_nodes:
+                n.sibling = not n.selected
         return nodes
 
     def _mark_descendants(self, nodes):
         for node in nodes:
             node.descendant = True
-            self._mark_descendants(node.children)
+            node.children and self._mark_descendants(node.children)
 
     def _get_selected(self, nodes):
-        selected = None
         for node in nodes:
-            if node.selected:
-                selected = node
-        return selected
-        
+            if node.selected: return node
+
     def _get_full_chain(self, nodes, selected):
         """get all chain elements from nodes list"""
         ancestors = []
@@ -240,10 +247,9 @@ class MenuPool(object):
 
     def _storage_trigger(self, request, nodes):
         """request.meta data inserter trigger"""
-        nodes = self.get_nodes(request, breadcrumb=True)
         selected = self._get_selected(nodes)
         chain = self._get_full_chain(nodes, selected)
-        
+
         request.meta.current = selected
         if chain:
             # storage meta data
@@ -254,5 +260,5 @@ class MenuPool(object):
         if selected and not (chain and selected == chain[-1]):
             # set selected meta_title to title tag anyway
             request.meta.title.append(selected.meta_title)
-        
+
 menu_pool = MenuPool()

@@ -1,12 +1,13 @@
 from django import template
 from django.conf import settings
-from django.utils.translation import activate, get_language, ugettext
 from django.core.cache import cache
+from django.utils.translation import activate, get_language, ugettext
 from menus.template import simple_tag_ex, inclusion_tag_ex, get_from_context
 from menus.menu_pool import menu_pool
 
-def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100, 
-               template="menus/menu.html", namespace=None, root_id=None, show_unvisible=False):
+def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100,
+               template=None, namespace=None, root_id=None,
+                show_unvisible=False, show_inactive_branch=False):
     """
     render a nested list of all children of the pages
     - from_level: starting level
@@ -16,20 +17,21 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
     - template: template used to render the menu
     - namespace: the namespace of the menu. if empty will use all namespaces
     - root_id: the id of the root node
+    - show_unvisible: show nodes marked as hidden
+    - show_inactive_branch: show nodes in inactive branch (use when from_level > 0)
     """
 
-    # If there's an exception (500), default context_processors may not be called.
-    request = context.get('request', None)
-    if not request: return {'template': 'menus/empty.html'}
     # set template by default
     template = template or "menus/menu.html"
-    # new menu... get all the data so we can save a lot of queries
+    # if there's an exception (500), default context_processors may not be called.
+    request = context.get('request', None)
+    if not request: return {'template': 'menus/empty.html'}
+    # get nodes (by root and/or by namespace if defined)
     nodes = menu_pool.get_nodes(request, namespace, root_id)
-    # get nodes in root if defined
-    if root_id:
-        nodes, from_level = nodes_in_root(nodes, root_id, from_level)
+    if not nodes: return {'template': template}
 
-    children = cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_unvisible)
+    from_level, to_level, extra_inactive, extra_active = parse_params(nodes, from_level, to_level, extra_inactive, extra_active)
+    children = cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_unvisible, show_inactive_branch)
     children = menu_pool.apply_modifiers(children, request, namespace, root_id, post_cut=True)
 
     context.update({'children':children,
@@ -41,83 +43,77 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
                     'namespace':namespace})
     return context
 
-def show_menu_below_id(context, root_id=None, from_level=0, to_level=100, extra_inactive=100, extra_active=100, 
-                        template="menus/menu.html", namespace=None):
-    """displays a menu below a node that has an uid"""
-    return show_menu(context, from_level, to_level, extra_inactive, extra_active, template, root_id=root_id, namespace=namespace)
-
-def show_sub_menu(context, levels=100, template="menus/sub_menu.html"):
-    """
-    show the sub menu of the current nav-node.
-    -levels: how many levels deep
-    -temlplate: template used to render the navigation
-    """
-
-    # If there's an exception (500), default context_processors may not be called.
-    request = context.get('request', None)
-    if not request: return {'template': 'menus/empty.html'}
-
-    nodes = menu_pool.get_nodes(request)
-    children = []
-    for node in nodes:
-        if node.selected:
-            cut_after(node, levels, [])
-            children = node.children
-            for child in children:
-                child.parent = None
-            children = menu_pool.apply_modifiers(children, request, post_cut=True)
-    context.update({'children':children,
-                    'template':template,
-                    'from_level':0,
-                    'to_level':0,
-                    'extra_inactive':0,
-                    'extra_active':0
-                    })
-    return context
-
 def show_breadcrumb(context, start_level=0, template="menus/breadcrumb.html"):
     """
     Shows the breadcrumb from the node that has the same url as the current request
-
     - start level: after which level should the breadcrumb start? 0=home
     - template: template used to render the breadcrumb
     """
 
-    # If there's an exception (500), default context_processors may not be called.
+    # if there's an exception (500), default context_processors may not be called.
     request = context.get('request', None)
     if not request: return {'template': 'menus/empty.html'}
 
-    nodes = menu_pool.get_nodes(request, breadcrumb=True)
-    chain = menu_pool._get_full_chain(nodes)
-
-    if len(chain) >= start_level:
-        chain = chain[start_level:]
-    else:
-        chain = []
-    context.update({'chain': chain,
-                    'template': template})
+    nodes = menu_pool.get_nodes(request)
+    chain = menu_pool._get_full_chain(nodes, menu_pool._get_selected(nodes))
+    chain = chain[start_level:] if len(chain) >= start_level else []
+    context.update({'chain': chain, 'template': template})
     return context
 
-def nodes_after_node(node, result, unparent=False):
-    if not node.children:
-        return result
-    for n in node.children:
-        result.append(n)
-        if unparent:
-            n.parent = None
-        if n.children:
-            result = nodes_after_node(n, result)
-    return result
+def load_menu(parser, token):
+    """loads menu, set data to request.meta first"""
+    class LoadMenuNode(template.Node):
+        def render(self, context):
+            request = get_from_context(context, 'request')
+            menu_pool.get_nodes(request, init_only=True)
+            return ''
+    return LoadMenuNode()
 
-def nodes_in_root(nodes, root_id, from_level):
-    """get nodes in node with reverse_id == root_id"""    
-    new_nodes = []
-    id_nodes = menu_pool.get_nodes_by_attribute(nodes, "reverse_id", root_id)
-    if id_nodes:
-        new_nodes = nodes_after_node(id_nodes[0], [], unparent=True)
-        # set from_level to next level after root (important in cut_levels)
-        from_level = id_nodes[0].level + 1
-    return new_nodes, from_level
+def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
+                show_unvisible=False, show_inactive_branch=False):
+    """cutting nodes away from menus"""
+    final, removed, selected, in_branch = [], {}, None, False
+    root_level, only_active_branch = nodes[0].level, not show_inactive_branch and nodes[0].level < from_level
+    for node in nodes:
+        # ignore nodes, which already is removed
+        if node.id in removed: continue
+        # check only active branch if some conditions
+        if only_active_branch:
+            if not in_branch and node.level == from_level:
+                in_branch = node.selected or node.ancestor or node.descendant
+            elif in_branch and node.level == root_level:
+                break
+            if not in_branch:
+                continue
+        # remove and ignore nodes that don't have level information
+        if not hasattr(node, 'level'):
+            remove(node, removed)
+            continue
+        # turn nodes that are on from_level into root nodes
+        if node.level == from_level:
+            final.append(node)
+            node.parent = None
+        # cut inactive nodes to extra_inactive (nodes in not active branch)
+        if root_level == node.level and not any((node.ancestor, node.selected, node.descendant)):
+            node.children and cut_after(node, extra_inactive, removed)
+        # remove nodes that are too deep
+        if node.level > to_level:
+            remove(node, removed)
+        # save selected node
+        if node.selected:
+            selected = node
+        # hide node if required
+        if not show_unvisible and not node.visible:
+            remove(node, removed)
+    if selected:
+        node.children and cut_after(selected, extra_active, removed)
+    if removed:
+        ftemp, final = final, []
+        for node in ftemp:
+            if node.id in removed: continue
+            final.append(node)
+
+    return final
 
 def cut_after(node, levels, removed):
     """given a tree of nodes cuts after N levels"""
@@ -137,61 +133,27 @@ def remove(node, removed):
         node.parent.children.remove(node)
     node.children and cut_after(node, 0, removed)
 
-def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_unvisible=False):
-    """cutting nodes away from menus"""
-    final, removed, selected, in_branch = [], {}, None, False
-    from_gt_root = nodes[0].level < from_level
-    for node in nodes:
-        # ignore nodes, which already in removed dict
-        if node.id in removed: continue
-        # check only selected branch if from_level > level of root nodes
-        if from_gt_root:
-            if not in_branch and node.level+1 == from_level:
-                in_branch = node.ancestor or node.selected
-            elif in_branch and node.level < from_level:
-                break
-            if not in_branch:
-                continue
-        # remove and ignore nodes that don't have level information
-        if not hasattr(node, 'level'):
-            remove(node, removed)
-            continue
-        # turn nodes that are on from_level into root nodes
-        if node.level == from_level:
-            final.append(node)
-            node.parent = None
-        # cut inactive nodes to extra_inactive, but not of descendants of the selected node
-        if not node.ancestor and not node.selected and not node.descendant:
-            node.children and cut_after(node, extra_inactive, removed)
-        # remove nodes that are too deep
-        if node.level > to_level and node.parent:
-            remove(node, removed)
-        if node.selected:
-            selected = node
-        if not show_unvisible and not node.visible:
-            # cut_after(node, 0, removed) # may be
-            remove(node, removed)
-    if selected:
-        node.children and cut_after(selected, extra_active, removed)
-    if removed:
-        ftemp, final = final, []
-        for node in ftemp:
-            if node.id in removed: continue
-            final.append(node)
-    return final
+def parse_params(nodes, *params):
+    """process params with - or + or = if defined"""
+    check = lambda x: not isinstance(x, int) or x < 0
+    if not filter(check, params): return params
 
-def load_menu(parser, token):
-    """loads menu, set data to request.meta first"""
-    class LoadMenuNode(template.Node):
-        def render(self, context):
-            request = get_from_context(context, 'request')
-            menu_pool.get_nodes(request)
-            return ''
-    return LoadMenuNode()
+    current = menu_pool._get_selected(nodes)
+    current, params = current.level if current else 0, list(params)
+    operations = {'+': int.__add__, '-': int.__sub__}
+    for i in range(0, len(params)):
+        if not check(params[i]): continue
+        param = params[i].__str__()
+        if param[0] == '=':
+            value = current
+        else:
+            value, sign = param.strip('+-'), param[0] if param[0] in ['+', '-'] else '+'
+            value = int(value) if value and value.isdigit() else 0
+            value = operations[sign](current, value)
+        params[i] = value if value > 0 else 0
+    return params
 
 register    = template.Library()
 load_menu   = register.tag(load_menu)
-inclusion_tag_ex(register, takes_context=True)(show_menu)
-inclusion_tag_ex(register, takes_context=True)(show_menu_below_id)
-inclusion_tag_ex(register, takes_context=True)(show_sub_menu)
+inclusion_tag_ex(register, takes_context=True, asis_params=True)(show_menu)
 inclusion_tag_ex(register, takes_context=True)(show_breadcrumb)

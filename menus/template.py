@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from django import template
 from django.template import Node, generic_tag_compiler, Variable, TemplateSyntaxError
 from django.template.context import Context
@@ -13,7 +12,7 @@ def get_from_context(context, variable='request'):
 
 def simple_tag_ex(register, func, takes_context=False):
     """
-    simple_tag_ex decorater: works like original, 
+    simple_tag_ex decorater: works like original,
     but takes "takes_context" variable like inclusion_tag
     requires register as first param
     """
@@ -42,24 +41,38 @@ def simple_tag_ex(register, func, takes_context=False):
     register.tag(getattr(func, "_decorated_function", func).__name__, compile_func)
     return func
 
-def inclusion_tag_ex(register, context_class=Context, takes_context=False):
+def inclusion_tag_ex(register, context_class=Context, takes_context=False, asis_params=False):
     """
-    inclusion_tag_ex decorater: works like original, 
+    inclusion_tag_ex decorater: works like original,
     but takes "file_name" variable from result of function call
     requires register as first param
+    asis_params do not fetch first 4 params from contexts (for show_menu only)
     """
-    
+
     def dec(func):
         params, xx, xxx, defaults = getargspec(func)
+
         if takes_context:
-            if params[0] == 'context':
-                params = params[1:]
-            else:
+            if not params[0] == 'context':
                 raise TemplateSyntaxError("Any tag function decorated with takes_context=True must have a first argument of 'context'")
-        
+            params = params[1:]
+
+        class FakeVariable(object):
+            def __init__(self, var):
+                self.var = var
+            def resolve(self, context):
+                return self.var
+
+        def vartype_chooser(val):
+            return (FakeVariable if val and val[0] in ['+', '-', '='] else Variable)(val)
+
         class InclusionNode(Node):
+
             def __init__(self, vars_to_resolve):
-                self.vars_to_resolve = map(Variable, vars_to_resolve)
+                if asis_params:
+                    self.vars_to_resolve = map(vartype_chooser, vars_to_resolve[:4]) + map(Variable, vars_to_resolve[4:])
+                else:
+                    self.vars_to_resolve = map(Variable, vars_to_resolve)
 
             def render(self, context):
                 resolved_vars = [var.resolve(context) for var in self.vars_to_resolve]
