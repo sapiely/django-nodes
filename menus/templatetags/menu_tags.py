@@ -30,17 +30,18 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
     nodes = menu_pool.get_nodes(request, namespace, root_id)
     if not nodes: return {'template': template}
 
-    from_level, to_level, extra_inactive, extra_active = parse_params(nodes, from_level, to_level, extra_inactive, extra_active)
-    children = cut_levels(nodes, from_level, to_level, extra_inactive, extra_active, show_unvisible, show_inactive_branch)
+    fr_l, to_l, e_in, e_ac = parse_params(nodes, from_level, to_level, extra_inactive, extra_active)
+    children, selected = cut_levels(nodes, fr_l, to_l, e_in, e_ac, show_unvisible, show_inactive_branch)
     children = menu_pool.apply_modifiers(children, request, namespace, root_id, post_cut=True)
 
-    context.update({'children':children,
-                    'template':template,
-                    'from_level':from_level,
-                    'to_level':to_level,
-                    'extra_inactive':extra_inactive,
-                    'extra_active':extra_active,
-                    'namespace':namespace})
+    context.update({'children': children,
+                    'selected': selected,
+                    'template': template,
+                    'namespace': namespace,
+                    'from_level': fr_l,
+                    'to_level': to_l,
+                    'extra_inactive': e_in,
+                    'extra_active': e_ac,})
     return context
 
 def show_breadcrumb(context, start_level=0, template="menus/breadcrumb.html"):
@@ -73,7 +74,7 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
                 show_unvisible=False, show_inactive_branch=False):
     """cutting nodes away from menus"""
     final, removed, selected, in_branch = [], {}, None, False
-    root_level, only_active_branch = nodes[0].level, not show_inactive_branch and nodes[0].level < from_level
+    only_active_branch = not show_inactive_branch and nodes[0].level < from_level
     for node in nodes:
         # ignore nodes, which already is removed
         if node.id in removed: continue
@@ -81,7 +82,7 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         if only_active_branch:
             if not in_branch and node.level == from_level:
                 in_branch = node.selected or node.ancestor or node.descendant
-            elif in_branch and node.level == root_level:
+            elif in_branch and node.level < from_level:
                 break
             if not in_branch:
                 continue
@@ -113,7 +114,7 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
             if node.id in removed: continue
             final.append(node)
 
-    return final
+    return final, selected
 
 def cut_after(node, levels, removed):
     """given a tree of nodes cuts after N levels"""
