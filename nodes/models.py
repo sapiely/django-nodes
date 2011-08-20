@@ -8,7 +8,7 @@ class Node(models.Model):
     """A simple hierarchical node model"""
 
     CHOICES_BEHAVIOUR = (
-        ('list', 'always list'), 
+        ('list', 'always list'),
         ('item', 'always item'),
         ('node', 'always node'),
     )
@@ -120,7 +120,7 @@ class Node(models.Model):
         order_by    = [i for i in self.order_by.split(' ') if i.replace('-', '', 1) in fields] if self.order_by else []
         order_by    = order_by or default
         return order_by
-    
+
     def get_path(self):
         return ('%s/' % self.path if self.path else '') + self.slug
 
@@ -180,7 +180,7 @@ class Item(models.Model):
 
     def __unicode__(self):
         return self.name
-        
+
     def get_absolute_url(self, use_link=True):
         if use_link and self.link:
             link = self.link
@@ -188,6 +188,6 @@ class Item(models.Model):
             data = {'path': self.node.get_link_or_path().strip('/').__str__(), '_0': 'i/%s/' % self.slug}
             link = reverse('nodes_%s' % self.node_name, kwargs=data)
         return link
-        
+
     def get_absolute_url_real(self):
         return self.get_absolute_url(use_link=False)

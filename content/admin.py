@@ -1,10 +1,12 @@
 from django.contrib import admin
+from django.conf import settings
 from nodes.admin import NodeAdmin, ItemAdmin
+from sakkada.admin.cache_clear import CacheClearAdmin
 from sakkada.admin.editors.tinymce import EditorAdmin
 from models import NodeMain, ItemMain, ItemImageMain
 
 # Main node admin
-class NodeMainAdmin(EditorAdmin, NodeAdmin):
+class NodeMainAdmin(CacheClearAdmin, EditorAdmin, NodeAdmin):
     tinymce_fields = ['text']
 
 class ItemImageMainInline(admin.TabularInline):
@@ -18,3 +20,4 @@ class ItemMainAdmin(EditorAdmin, ItemAdmin):
 
 admin.site.register(NodeMain, NodeMainAdmin)
 admin.site.register(ItemMain, ItemMainAdmin)
+admin.site.index_template = 'admin/cache/index_admin.html'

@@ -1,3 +1,5 @@
+from django import forms
+from django.db import models
 from django.contrib import admin
 from django.core.urlresolvers import reverse
 from django.utils.translation import ugettext_lazy as _
@@ -8,14 +10,15 @@ from sakkada.admin.fein.meta_editor import ajax_editable_boolean
 
 class NodeAdmin(TreeEditor, FkeyInMpttAdmin, admin.ModelAdmin):
     list_display = (
-        'name', 'id', 'slug', 'level',
-        'toggle_active', 'toggle_menu_in', 'toggle_menu_in_chain', 'toggle_menu_jump', 'toggle_menu_login', 'toggle_menu_current', 
-        'item_link', 'node_link', 
+        'indented_short_title', 'item_link', 'node_link', 'id', 'slug', 'level',
+        'toggle_active', 'toggle_menu_in', 'toggle_menu_in_chain', 'toggle_menu_jump', 'toggle_menu_login', 'toggle_menu_current',
     )
+    list_display_links = ('id',)
+    list_filter = ['level']
 
     ordering = ['site', 'tree_id', 'lft']
-    list_filter = ['level']
     prepopulated_fields = {'slug': ('name',)}
+    formfield_overrides = {models.CharField: {'widget': forms.TextInput(attrs={'size': 99,})},}
     fieldsets = (
             (None, {
                 'fields': ('name', 'active', 'text')
@@ -44,9 +47,15 @@ class NodeAdmin(TreeEditor, FkeyInMpttAdmin, admin.ModelAdmin):
     toggle_menu_jump        = ajax_editable_boolean('menu_jump', 'jump?')
     toggle_menu_login       = ajax_editable_boolean('menu_login_required', 'login?')
     toggle_menu_current     = ajax_editable_boolean('menu_show_current', 'h1 title?')
-    
+
     item_link = fkey_in_link('item', model_set='item_set',  fkey_name='node',   with_add_link=True)
     node_link = fkey_in_link('node', model_set='children',  fkey_name='parent', with_add_link=True)
+
+    def indented_short_title_text(self, item):
+        return '%s %s' % (
+            u'<a href="%s" title="show related elements">%s</a>' % (self.item_link(item, url_only='list'),  unicode(item),),
+            u'<nobr>(<a href="%s/" title="edit &laquo;%s&raquo;">edit</a>)</nobr>' % (item.pk, item.__class__._meta.verbose_name,),
+        )
 
     def get_form(self, request, obj=None, **kwargs):
         form = super(NodeAdmin, self).get_form(request, obj=None, **kwargs)
@@ -56,14 +65,15 @@ class NodeAdmin(TreeEditor, FkeyInMpttAdmin, admin.ModelAdmin):
 
 class ItemAdmin(ListEditor, FkeyInAdmin, admin.ModelAdmin):
     list_display = (
-        'name', 'id', 'slug', 'image_tag',
-        'toggle_active', 'toggle_visible', 'toggle_show_item_name', 'toggle_show_node_link', 'toggle_show_in_meta', 
+        'name', 'id', 'slug', 'sort', 'image_tag',
+        'toggle_active', 'toggle_visible', 'toggle_show_item_name', 'toggle_show_node_link', 'toggle_show_in_meta',
     )
+    list_filter = ['node', 'date_create']
 
     ordering = ['-sort']
-    list_filter = ['node', 'date_create']
     search_fields = ['name']
     prepopulated_fields = {'slug': ('name',)}
+    formfield_overrides = {models.CharField: {'widget': forms.TextInput(attrs={'size': 99,})},}
     fieldsets = (
             (None, {
                 'fields': ('active', 'date_start', 'date_end', 'name', 'sort', 'descr', 'text', 'image')
@@ -81,7 +91,7 @@ class ItemAdmin(ListEditor, FkeyInAdmin, admin.ModelAdmin):
                 'fields': ('template', 'view', 'visible', 'show_item_name', 'show_node_link', 'show_in_meta',)
             }),
         )
-    
+
     toggle_active           = ajax_editable_boolean('active', 'active?')
     toggle_visible          = ajax_editable_boolean('visible', 'visible?')
     toggle_show_item_name   = ajax_editable_boolean('show_item_name', 'name?')

@@ -5,22 +5,18 @@
 <html lang="ru">
     <head>
         <!-- TITLE, KEYWORDS, DESCRIPTION -->
-        <title></title>
+        <title>{% block title %}{% show_meta_title "Main title" %}{% endblock %}</title>
         <!-- // TITLE, KEYWORDS, DESCRIPTION -->
         <meta http-equiv="content-type" content="text/html; charset=utf-8">
+        {% show_meta_keywords "Main keyword" 1 %}
+        {% show_meta_description "Main description" 1 %}
     </head>
     <body>
-        <pre>
-            {% block title %}{% show_meta_title "Main title" %}{% endblock %}
-            {% show_meta_keywords "Main keyword" %}
-            {% show_meta_description "Main description" %}
-        </pre>
-
         <!-- BREADCRUMBS -->
-        {% block breadcrumbs %}{% show_meta_chain "Главная" %}{% endblock %}
+        {% block breadcrumbs %}{% show_meta_chain "Main" %}{% endblock %}
         <!-- // BREADCRUMBS -->
-        
-        <div class="cntLayout">
+
+        <div class="layout">
             <!--NAVIGATION RIGHT-->
             {% block navigation_side %}{% show_menu 0 10 10 10 "menus/menu.html" %}{% endblock %}
             <!--// NAVIGATION RIGHT-->
@@ -29,11 +25,11 @@
                 <!-- H1 CURRENT SECTION NAME -->
                 {% block current %}{% show_meta_current %}{% endblock %}
                 <!-- // H1 CURRENT SECTION NAME -->
+
                 {% block content %}{% endblock %}
             </div>
         </div>
 
-        {% block scripts %}
-        {% endblock %}
+        {% block scripts %}{% endblock %}
     </body>
 </html>

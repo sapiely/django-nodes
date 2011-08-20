@@ -15,7 +15,7 @@ class NodeMenu(Menu):
 
         if node.menu_extender:
             attr['navigation_extenders'] = [i.strip() for i in node.menu_extender.split(',') if i.strip()]
-            
+
         return attr
 
     def get_nodes(self, request):
