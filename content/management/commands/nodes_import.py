@@ -81,12 +81,9 @@ class Command(BaseCommand):
 
     def get_model(self, name):
         """Get required model by name"""
-        model = None
         for i in models.get_models():
             if i.__name__ == name and issubclass(i, Node):
-                model = i
-                break
-        return model
+                return i
 
     def insert_tree(self, data, parent=None, model=None):
         """Reccursive tree generating from datadict."""
