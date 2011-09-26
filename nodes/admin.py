@@ -18,7 +18,7 @@ class NodeAdmin(TreeEditor, FkeyInMpttAdmin, admin.ModelAdmin):
 
     ordering = ['site', 'tree_id', 'lft']
     prepopulated_fields = {'slug': ('name',)}
-    formfield_overrides = {models.CharField: {'widget': forms.TextInput(attrs={'size': 99,})},}
+    wideinput_fields = ['name', 'slug', 'link', 'menu_title', 'menu_extender', 'meta_title', 'meta_keywords', 'template', 'view', 'order_by']
     fieldsets = (
             (None, {
                 'fields': ('name', 'active', 'text')
@@ -57,6 +57,13 @@ class NodeAdmin(TreeEditor, FkeyInMpttAdmin, admin.ModelAdmin):
             u'<nobr>(<a href="%s/" title="edit &laquo;%s&raquo;">edit</a>)</nobr>' % (item.pk, item.__class__._meta.verbose_name,),
         )
 
+    def formfield_for_dbfield(self, db_field, **kwargs):
+        formfield = super(NodeAdmin, self).formfield_for_dbfield(db_field, **kwargs)
+        # change widget for wideinput_fields directly (not formfield_overrides)
+        if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
+            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length, 'size': 100,})
+        return formfield
+
     def get_form(self, request, obj=None, **kwargs):
         form = super(NodeAdmin, self).get_form(request, obj=None, **kwargs)
         # indent tree node titles
@@ -73,7 +80,7 @@ class ItemAdmin(ListEditor, FkeyInAdmin, admin.ModelAdmin):
     ordering = ['-sort']
     search_fields = ['name']
     prepopulated_fields = {'slug': ('name',)}
-    formfield_overrides = {models.CharField: {'widget': forms.TextInput(attrs={'size': 99,})},}
+    wideinput_fields = ['name', 'slug', 'link', 'meta_title', 'meta_keywords', 'template', 'view',]
     fieldsets = (
             (None, {
                 'fields': ('active', 'date_start', 'date_end', 'name', 'sort', 'descr', 'text', 'image')
@@ -98,6 +105,13 @@ class ItemAdmin(ListEditor, FkeyInAdmin, admin.ModelAdmin):
     toggle_show_node_link   = ajax_editable_boolean('show_node_link', 'to list?')
     toggle_show_in_meta     = ajax_editable_boolean('show_in_meta', 'meta?')
 
+    def formfield_for_dbfield(self, db_field, **kwargs):
+        formfield = super(ItemAdmin, self).formfield_for_dbfield(db_field, **kwargs)
+        # change widget for wideinput_fields directly (not formfield_overrides)
+        if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
+            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length, 'size': 100,})
+        return formfield
+    
     def get_form(self, request, obj=None, **kwargs):
         form = super(ItemAdmin, self).get_form(request, obj=None, **kwargs)
         # indent tree node titles
