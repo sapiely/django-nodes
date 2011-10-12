@@ -81,7 +81,7 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         # check only active branch if some conditions
         if only_active_branch:
             if not in_branch and node.level == from_level:
-                in_branch = node.selected or node.ancestor or node.descendant
+                in_branch = node.selected or node.ancestor or node.descendant or node.sibling
             elif in_branch and node.level < from_level:
                 break
             if not in_branch:
