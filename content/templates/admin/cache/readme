@@ -1,4 +1,4 @@
 in change_list file change
     {% extends "admin/change_list.html" %}
 to
-    {% extends "admin/fein/tree_editor.html" %}
+    {% extends "admin/mptt_tree/tree_change_list.html" %}

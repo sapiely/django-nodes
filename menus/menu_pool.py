@@ -88,8 +88,8 @@ class MenuPool(object):
             nodes = self._mark_anc_des_sib_flags(nodes)
             self._storage_trigger(request, nodes)
             request.meta._nodes = nodes
-            if init_only: return
 
+        if init_only: return
         nodes, meta = copy.deepcopy(nodes), None
         if root_id:
             nodes, meta = self._nodes_in_root(nodes, root_id), {'modified_ancestors': True}

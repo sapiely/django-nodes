@@ -5,5 +5,5 @@ from models import NodeMain
 class NodeMainMenu(NodeMenu):
     model_class = NodeMain
 
-# register all menu classes
+# register menu class(es)
 menu_pool.register_menu(NodeMainMenu)

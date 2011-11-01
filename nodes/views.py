@@ -35,8 +35,8 @@ class NodeView(TemplateView):
         self.node = node
         self.options = {'filter': filter & Q(visible=True), 'filter_item': filter, 'order_by': order_by,}
         self.classes = {'node': Node, 'item': Item}
-        self.queryset       = Item.objects.select_related('node').filter(self.options['filter']).order_by(*self.options['order_by'])
-        self.queryset_item  = Item.objects.select_related('node').filter(self.options['filter_item'], slug=kwargs['item']) if kwargs['item'] else None
+        self.queryset       = self.get_item_queryset(Item, 'list').filter(self.options['filter']).order_by(*self.options['order_by'])
+        self.queryset_item  = self.get_item_queryset(Item, 'item').filter(self.options['filter_item'], slug=kwargs['item']) if kwargs['item'] else None
 
         context = self.behaviour()
         if issubclass(context.__class__, HttpResponse):
@@ -44,6 +44,9 @@ class NodeView(TemplateView):
 
         context = self.get_context_data(**context)
         return self.render_to_response(context)
+
+    def get_item_queryset(self, model, target):
+        return model.objects.select_related('node')
 
     def get_node(self, model):
         """get curent node"""
@@ -87,8 +90,6 @@ class NodeView(TemplateView):
 
         # if zero count or "always node" > if node.text - node view, else 404
         if node.behaviour == 'node' or not node.items_count:
-            if not node.text:
-                raise Http404(u'No Items in node "%s" (behaviour: "%s").' % (node, node.behaviour))
             return self.view_node()
 
         # list view if conditions, else item view

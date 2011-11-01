@@ -2,6 +2,10 @@
 
 {% block content %}
 
+    {% if node.text %}
     <p>{{ node.text|safe }}</p>
+    {% else %}
+    <p>The node is empty, content will coming soon.</p>
+    {% endif %}
 
 {% endblock %}

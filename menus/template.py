@@ -7,7 +7,7 @@ from inspect import getargspec
 def get_from_context(context, variable='request'):
     value = context.get(variable, None)
     if value is None:
-        raise VariableDoesNotExist('Variable "%s" does not exists.' % variable)
+        raise template.VariableDoesNotExist('Variable "%s" does not exists.' % variable)
     return value
 
 def simple_tag_ex(register, func, takes_context=False):

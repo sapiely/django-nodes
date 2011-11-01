@@ -2,11 +2,9 @@
 
 {% block content %}
 
-    <ul id="newsList">
+    <ul id="item_list">
         {% for item in item_list.object_list %}
-        <li>
-            <h2><a href="{{ item.get_absolute_url }}{{ query_string.as__full }}">{{ item.name }}</a> {{ item.date_start|date:"d.m.Y" }}</h2>
-        </li>
+        <li><h2><a href="{{ item.get_absolute_url }}{{ query_string.as__full }}">{{ item.name }}</a> {{ item.date_start|date:"d.m.Y" }}</h2></li>
         {% endfor %}
     </ul>
 

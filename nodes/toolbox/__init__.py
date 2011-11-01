@@ -18,7 +18,7 @@ def class_by_name_and_type(name, class_type='node'):
     class_inst = [c for c in models.get_models() if c.__name__ == class_name]
     class_inst = class_inst[0] if class_inst.__len__() else None
     if not class_inst:
-        raise Exception('Nodes error - reqired class %s (%s, %s) not defined, check your url conf.' % (class_name, class_type, name))
+        raise Exception('Nodes error: reqired class %s (%s, %s) not defined, check your url conf.' % (class_name, class_type, name))
 
     return class_inst
 

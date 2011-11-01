@@ -60,5 +60,5 @@ class ItemImageMain(models.Model):
     image_tag.short_description = _('Image')
     image_tag.allow_tags = True
 
-# register all mptt classes
+# register mptt classes
 mptt.register(NodeMain)
