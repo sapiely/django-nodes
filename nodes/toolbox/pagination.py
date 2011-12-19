@@ -1,10 +1,30 @@
-def pagination(page, window=2):
+class PaginationBase(object):
     """
-    pagination (110322)
-    ----------
     usage:
-        pg = pagination(page, 2) # page - core paginator Page object
-        pg = pagination(page, 2) # page - dict {'page': 3, 'count': 200, 'onpage': 20}
+        pagination = Pagination(page) # page - core paginator Page object
+        pagination = Pagination(page) # page - dict {'page': 3, 'count': 200, 'perpage': 20,}
+                                      #        or   {'page': 3, 'pages': 10,}
+    """
+
+    def __init__(self, page, paginate=True):
+        if isinstance(page, dict):
+            pages   = page.get('pages') or 1 if page.has_key('pages') else None
+            pages   = pages or (page['count']//page['perpage'] + (page['count'] % page['perpage'] and 1))
+            number  = page['page'] if 1 <= page['page'] <= pages else 1
+        else:
+            pages   = page.paginator.num_pages
+            number  = page.number
+
+        self.pages, self.number = pages, number
+        paginate and self.paginate()
+
+    def paginate(self):
+        raise NotImplementedError
+
+class Pagination(PaginationBase):
+    """
+    usage:
+        pagination = Pagination(page, window=2)
 
     template:
         {% if pagination and pagination.num_pages > 1 %}
@@ -28,46 +48,44 @@ def pagination(page, window=2):
     {% endif %}
     """
 
-    if isinstance(page, dict):
-        pages       = page['count']//page['onpage'] + (page['count'] % page['onpage'] and 1)
-        current     = page['page'] if 1 <= page['page'] <= pages else 1
-    else:
-        pages       = page.paginator.num_pages
-        current     = page.number
-    window      = window if window > 0 else 2
-    start       = current - window
-    start       = start if start > 1 else 1
-    end         = current + window
-    end         = end if end < pages else pages
+    window = 2
 
-    # save window*2 count
-    if ((current - start) < window):
-        end = (end + (window - (current - start)))
-    elif ((end - current) < window):
-        start = (start - (window - (end - current)))
-    start       = start if start > 1 else 1
-    end         = end if end < pages else pages
-    # // save window*2 count
+    def __init__(self, page, window=None):
+        if isinstance(window, int) and window > 0:
+            self.window = window
+        super(Pagination, self).__init__(page)
 
-    start_dot   = start > 1
-    end_dot     = end < pages
+    def paginate(self):
+        number, pages, window = self.number, self.pages, self.window
 
-    pagination                  = dict()
-    pagination['pages']         = list()
-    pagination['num_pages']     = pages
+        # get start and end
+        start = number - window
+        start = start if start > 1 else 1
+        end = number + window
+        end = end if end < pages else pages
 
-    pagination['prev']          = current - 1 if current > 1 else None
-    pagination['first']         = 1 if start_dot else None
-    pagination['dots_left']     = start-1 if start_dot and start-1>1 else None
-    pagination['current']       = current
-    pagination['dots_right']    = end+1 if end_dot and end+1<pages else None
-    pagination['last']          = pages if end_dot else None
-    pagination['next']          = current + 1 if current < pages else None
+        # save window*2 count
+        if ((number - start) < window):
+            end = (end + (window - (number - start)))
+        elif ((end - number) < window):
+            start = (start - (window - (end - number)))
+        start = start if start > 1 else 1
+        end = end if end < pages else pages
+        # // save window*2 count
 
-    for i in range(start, end+1):
-        pagination['pages'].append({'current': i == current, 'number':i})
+        start_dot = start > 1
+        end_dot = end < pages
 
-    pagination['wind_left']     = start-2 if start_dot else None
-    pagination['wind_right']    = end-current if end_dot else None
+        self.pages      = list()
+        self.num_pages  = pages
 
-    return pagination
+        self.prev       = number - 1 if number > 1 else None
+        self.first      = 1 if start_dot else None
+        self.dots_left  = start-1 if start_dot and start-1>1 else None
+        self.current    = number
+        self.dots_right = end+1 if end_dot and end+1<pages else None
+        self.last       = pages if end_dot else None
+        self.next       = number + 1 if number < pages else None
+
+        for i in range(start, end+1):
+            self.pages.append({'current': i == number, 'number': i,})

@@ -82,8 +82,13 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         if only_active_branch:
             if not in_branch and node.level == from_level:
                 in_branch = node.selected or node.ancestor or node.descendant or node.sibling
-            elif in_branch and node.level < from_level:
-                break
+            elif in_branch:
+                # node is out of the selection
+                if node.level < from_level:
+                    break
+                # node is out of the selected branch
+                elif selected and selected.level > from_level and node.level == from_level:
+                    break
             if not in_branch:
                 continue
         # remove and ignore nodes that don't have level information

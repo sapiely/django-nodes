@@ -41,7 +41,7 @@ class ItemMain(Item):
 class ItemImageMain(models.Model):
     node_name               = 'main'
     item                    = models.ForeignKey(ItemMain, help_text=_('Parent item.'), related_name='image_set')
-    name                    = models.CharField(max_length=200, blank=True, null=True)
+    name                    = models.CharField(max_length=200, blank=True)
     sort                    = models.IntegerField(default=500)
     image                   = AdvancedImageWithThumbnailsField(
                                 _('Image'), blank=True, upload_to=FILES_UPLOAD_TO['itemimagemain__image'],

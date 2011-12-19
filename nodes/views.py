@@ -4,7 +4,7 @@ from django.views.generic import TemplateView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from toolbox import class_by_name_and_type, jump_node_by_node, meta_to_request
-from toolbox.pagination import pagination as pagination_tool
+from toolbox.pagination import Pagination
 from toolbox.querystring import QueryString
 
 class NodeView(TemplateView):
@@ -15,6 +15,7 @@ class NodeView(TemplateView):
     options = {}
     classes = {}
     context_ex = {}
+    pagination = Pagination
 
     def get(self, request, **kwargs):
         """get node data and call required view (node, list or item) or 404"""
@@ -100,8 +101,7 @@ class NodeView(TemplateView):
 
     def view_node(self):
         """node self view"""
-        template            = 'node.%s.html' % self.node.template if self.node.template else 'node.html'
-        self.template_name  = ["nodes/%s/%s" % (self.node.node_name, template), "nodes/%s" % template]
+        self.template_variation('node', self.node.template, [self.node.node_name])
 
         return {'node': self.node}
 
@@ -119,18 +119,16 @@ class NodeView(TemplateView):
         except (EmptyPage, InvalidPage):
             page        = paginator.num_pages
             item_list   = paginator.page(page)
-        pagination  = pagination_tool(item_list, 2)
+        item_list.pagination = self.pagination(item_list)
         # end paginator
 
-        template            = 'list.%s.html' % node.template if node.template else 'list.html'
-        self.template_name  = ["nodes/%s/%s" % (node.node_name, template), "nodes/%s" % template]
+        self.template_variation('list', node.template, [node.node_name])
 
         context     = {
             'node':         node,
             'item_list':    item_list,
-            'pagination':   pagination,
             'url_no_page':  node.get_absolute_url(),
-            'query_string': QueryString(self.request),
+            'querystring':  QueryString(self.request),
         }
 
         return context
@@ -155,8 +153,7 @@ class NodeView(TemplateView):
             self.request.meta.keywords.append(item.meta_keywords)
             self.request.meta.description.append(item.meta_description)
 
-        template            = 'item.%s.html' % (item.template or item.node.template) if item.template or item.node.template else 'item.html'
-        self.template_name  = ["nodes/%s/%s" % (item.node_name, template), "nodes/%s" % template]
+        self.template_variation('item', item.template or item.node.template, [item.node_name])
 
         context = {
             'item':         item,
@@ -174,6 +171,14 @@ class NodeView(TemplateView):
         context = kwargs
         context.update(self.context_ex)
         return context
+
+    def template_variation(self, tpltype, tplname, tplplaces=[], extention='html', prefix='nodes'):
+        tplbase = ['%s.%s.%s' % (tpltype, tplname, extention)] if tplname else []
+        tplbase.append('%s.%s' % (tpltype, extention))
+        tplaces = ['%s/%s/%%s' % (prefix, p) for p in tplplaces] if tplplaces else []
+        tplaces.append('%s/%%s' % prefix)
+        self.template_name = [(p % t) for t in tplbase for p in tplaces]
+        print self.template_name
 
     def view_ex_by_name(self, view_name, obj_type):
         """get extraview by name and type"""

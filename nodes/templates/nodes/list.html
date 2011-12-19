@@ -8,6 +8,8 @@
         {% endfor %}
     </ul>
 
+    {% with item_list.pagination as pagination %}
     {% include "nodes/pagination.html" %}
+    {% endwith %}
 
 {% endblock %}
