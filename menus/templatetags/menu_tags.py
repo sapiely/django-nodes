@@ -80,16 +80,13 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         if node.id in removed: continue
         # check only active branch if some conditions
         if only_active_branch:
+            # node is in selected branch: directry by sel-sib-des attrs or via parent.ancestor
             if not in_branch and node.level == from_level:
-                # node is in selected branch: directry by sel-sib-des attrs or via parent.ancestor
                 in_branch = node.descendant or node.parent.ancestor or node.sibling or node.selected
-            elif in_branch:
-                # node is out of the selection
-                if node.level < from_level:
-                    break
-                # node is out of the selected branch
-                elif selected and selected.level > from_level and node.level == from_level:
-                    break
+            # node is out of the selected branch - out of from_level
+            elif in_branch and node.level < from_level:
+                break
+            # ignore left side
             if not in_branch:
                 continue
         # remove and ignore nodes that don't have level information
