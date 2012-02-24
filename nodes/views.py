@@ -178,7 +178,6 @@ class NodeView(TemplateView):
         tplaces = ['%s/%s/%%s' % (prefix, p) for p in tplplaces] if tplplaces else []
         tplaces.append('%s/%%s' % prefix)
         self.template_name = [(p % t) for t in tplbase for p in tplaces]
-        print self.template_name
 
     def view_ex_by_name(self, view_name, obj_type):
         """get extraview by name and type"""

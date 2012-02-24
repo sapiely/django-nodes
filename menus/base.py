@@ -51,7 +51,7 @@ class NavigationNode(object):
     url                 = None
     id                  = None
     parent_id           = None
-    attr                = {}
+    attr                = None
 
     visible             = True
     visible_chain       = True
@@ -76,7 +76,7 @@ class NavigationNode(object):
         self.meta_title         = meta_title
         self.meta_keywords      = meta_keywords
         self.meta_description   = meta_description
-        if attr: self.attr = attr
+        self.attr               = attr or {}
 
     def __repr__(self):
         return "<Navigation Node: %s>" % smart_str(self.title)

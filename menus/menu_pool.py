@@ -2,8 +2,15 @@ from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.cache import cache
 from django.utils.translation import get_language
-from toolbox import NamespaceAllreadyRegistered, meta_to_request, cache_key_tool, import_path
-import copy
+from toolbox import NamespaceAllreadyRegistered, cache_key_tool, \
+                    meta_to_request, import_setting, import_path
+import copy, urlparse
+
+# get settings
+CHECK_URL_DOMAIN    = import_setting('MENUS_CHECK_URL_DOMAIN', lambda domain, node: False)
+MODIFIERS_REG       = import_setting('MENUS_MODIFIERS_REG', None)
+CACHE_DURATION      = getattr(settings, 'MENUS_CACHE_DURATION', 600)
+MENUS_APPS          = getattr(settings, 'MENUS_APPS', None)
 
 class MenuPool(object):
     def __init__(self):
@@ -14,13 +21,12 @@ class MenuPool(object):
 
     def discover_menus(self):
         if self.discovered: return
-        for app in settings.MENUS_APPS:
+        for app in MENUS_APPS:
             __import__(app, {}, {}, ['menu'])
         self.discovered = True
         # register modifiers
         from modifiers import register
-        callback = getattr(settings, 'MENUS_MODIFIERS_REG', None)
-        callback = callback and import_path(callback) or register
+        callback = MODIFIERS_REG or register
         callback()
 
     def clear(self, site_id=None, language=None):
@@ -77,16 +83,17 @@ class MenuPool(object):
             # cached nodes list selection
             cache_key = cache_key_tool(get_language(), site_id or Site.objects.get_current().pk, request)
             self.cache_keys.add(cache_key)
-            nodes = cache.get(cache_key, None)
+            nodes, paths = cache.get(cache_key, (None,)*2)
             if not nodes:
                 nodes = self._build_nodes(request)
                 nodes = self.apply_modifiers(nodes, request, modify_rule='once')
-                cache.set(cache_key, nodes, settings.MENUS_CACHE_DURATION)
+                paths = self._build_paths(nodes)
+                cache.set(cache_key, [nodes, paths], CACHE_DURATION)
 
             nodes = self.apply_modifiers(nodes, request, modify_rule='per_request')
-            nodes = self._mark_selected(request, nodes)
-            nodes = self._mark_anc_des_sib_flags(nodes)
-            self._storage_trigger(request, nodes)
+            selected = self._mark_selected(request, paths)
+            self._mark_anc_des_sib_flags(nodes)
+            self._storage_trigger(request, nodes, selected)
             request.meta._nodes = nodes
 
         if init_only: return
@@ -133,21 +140,24 @@ class MenuPool(object):
 
         # sort node by index attr desc
         menus = self.menus.values()
-        menus = sorted(menus, cmp=lambda x,y: cmp(x.index, y.index), reverse=True)
+        menus = sorted(menus, cmp=lambda x,y: cmp(x.index, y.index))
         # fetch all nodes from all menus
         for menu in menus:
             nodes, last = menu.get_nodes(request), None
             for node in nodes:
                 # set namespace (menu class name)
                 node.namespace = node.namespace or menu.namespace
+                final_nodes['ids'][node.namespace] = final_nodes['ids'].get(node.namespace, [])
+                ignored_nodes[node.namespace] = ignored_nodes.get(node.namespace, [])
+
                 # ignore nodes with dublicated ids
-                if final_nodes['ids'].get(node.id, None) == node.namespace:
+                if node.id in final_nodes['ids'][node.namespace]:
                     continue
                 if node.parent_id:
                     found = False
                     # ignore node if parent also ignored
-                    if ignored_nodes.get(node.parent_id, None) == node.namespace:
-                        ignored_nodes[node.id] = node.namespace
+                    if node.parent_id in ignored_nodes[node.namespace]:
+                        ignored_nodes[node.namespace].append(node.id)
                         continue
                     # try to find parent in ancestors chain (optimization)
                     if last:
@@ -166,11 +176,11 @@ class MenuPool(object):
                     if found:
                         node.parent.children.append(node)
                     else:
-                        ignored_nodes[node.id] = node.namespace
+                        ignored_nodes[node.namespace].append(node.id)
                         continue
                 # append node and it is to main list
                 final_nodes['nodes'].append(node)
-                final_nodes['ids'][node.id] = node.namespace
+                final_nodes['ids'][node.namespace].append(node.id)
                 # last node for search in ancestors
                 last = node
 
@@ -181,17 +191,42 @@ class MenuPool(object):
             node.sibling, node.ancestor, node.descendant, node.selected = (False,)*4
         return final_nodes
 
-    def _mark_selected(self, request, nodes):
-        """mark current node as selected"""
-        sel = None
+    # maximize selection speed with paths dict
+    def _get_path(self, node):
+        p = urlparse.urlparse(node.url)
+        if p.netloc and not CHECK_URL_DOMAIN(p.netloc, node):
+            return None, False
+        return p.path.strip('/').split('/'), not bool(p.params or p.query or p.fragment)
+
+    def _better_path(self, path, clean, ppath, pclean):
+        return len(path) < len(ppath) or (len(path) == len(ppath) and clean >= pclean)
+
+    def _build_paths(self, nodes):
+        data = {}
         for node in nodes:
-            if node.url == request.path[:len(node.url)]:
-                sel = node if not sel or (len(node.url) >= len(sel.url)) else sel
-            else:
-                node.selected = False
-        if sel:
-            sel.selected = True
-        return nodes
+            path, clean = self._get_path(node)
+            # ignore nodes with denied domain name
+            if not path: continue
+
+            for item in ['/'.join(path[:i]) for i in range(1, len(path)+1)]:
+                if data.has_key(item):
+                    # check this node better match than previous
+                    ppath, pclean = self._get_path(data[item])
+                    if self._better_path(path, clean, ppath, pclean):
+                        data[item] = node
+                else:
+                    # link path with node
+                    data[item] = node
+        return data
+
+    def _mark_selected(self, request, paths):
+        """mark current node as selected"""
+        path = request.path.strip('/').split('/')
+        for pkey in ['/'.join(path[:-i or None]) for i in range(0, len(path))]:
+            selected = paths.get(pkey, None)
+            if selected:
+                selected.selected = True
+                return selected
 
     def _mark_anc_des_sib_flags(self, nodes):
         """
@@ -219,16 +254,12 @@ class MenuPool(object):
         if selected and not selected.parent:
             for n in root_nodes:
                 n.sibling = not n.selected
-        return nodes
+        return
 
     def _mark_descendants(self, nodes):
         for node in nodes:
             node.descendant = True
             node.children and self._mark_descendants(node.children)
-
-    def _get_selected(self, nodes):
-        for node in nodes:
-            if node.selected: return node
 
     def _get_full_chain(self, nodes, selected):
         """get all chain elements from nodes list"""
@@ -245,11 +276,9 @@ class MenuPool(object):
         ancestors.reverse()
         return ancestors
 
-    def _storage_trigger(self, request, nodes):
+    def _storage_trigger(self, request, nodes, selected):
         """request.meta data inserter trigger"""
-        selected = self._get_selected(nodes)
         chain = self._get_full_chain(nodes, selected)
-
         request.meta.current = selected
         if chain:
             # storage meta data
