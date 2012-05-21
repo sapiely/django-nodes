@@ -124,11 +124,11 @@ class NodeView(TemplateView):
 
         self.template_variation('list', node.template, [node.node_name])
 
-        context     = {
-            'node':         node,
-            'item_list':    item_list,
-            'url_no_page':  node.get_absolute_url(),
-            'querystring':  QueryString(self.request),
+        context = {
+            'node': node,
+            'item_list': item_list,
+            'url_no_page': node.get_absolute_url(),
+            'querystring': QueryString(self.request),
         }
 
         return context
@@ -156,8 +156,8 @@ class NodeView(TemplateView):
         self.template_variation('item', item.template or item.node.template, [item.node_name])
 
         context = {
-            'item':         item,
-            'query_string': QueryString(self.request),
+            'item': item,
+            'querystring': QueryString(self.request),
         }
 
         return context

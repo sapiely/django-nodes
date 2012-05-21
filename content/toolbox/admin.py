@@ -2,12 +2,14 @@ from sakkada.admin.fkey_list import FkeyListAdmin, FkeyMpttAdmin, fkey_list_link
 from sakkada.admin.mptt_tree import MpttTreeAdmin, AjaxBoolAdmin, ajax_boolean
 from sakkada.admin.cache_clear import CacheClearAdmin
 from nodes.admin import NodeAdmin, ItemAdmin
+import copy
 
 class NodeNiceAdmin(CacheClearAdmin, MpttTreeAdmin, FkeyMpttAdmin, NodeAdmin):
     # add to display ajax booleans and fkey_list links
     list_display = (
         'indented_short_title', 'item_link', 'node_link', 'id', 'slug', 'level',
-        'toggle_active', 'toggle_menu_in', 'toggle_menu_in_chain', 'toggle_menu_jump', 'toggle_menu_login', 'toggle_menu_current',
+        'toggle_active', 'toggle_menu_in', 'toggle_menu_in_chain',
+        'toggle_menu_jump', 'toggle_menu_login', 'toggle_menu_current',
     )
 
     # mptt_tree ajax boolean
@@ -33,8 +35,13 @@ class ItemNiceAdmin(AjaxBoolAdmin, FkeyListAdmin, ItemAdmin):
     # add to display ajax booleans and image_tag
     list_display = (
         'name', 'id', 'slug', 'sort', 'image_tag',
-        'toggle_active', 'toggle_visible', 'toggle_show_item_name', 'toggle_show_node_link', 'toggle_show_in_meta',
+        'toggle_active', 'toggle_visible', 'toggle_show_item_name',
+        'toggle_show_node_link', 'toggle_show_in_meta',
     )
+
+    # add image field to first section
+    fieldsets = copy.copy(ItemAdmin.fieldsets)
+    fieldsets[0][1]['fields'] += ('image',)
 
     # mptt_tree ajax boolean
     toggle_active           = ajax_boolean('active', 'active?')

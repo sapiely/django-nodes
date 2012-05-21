@@ -4,6 +4,7 @@ from menus.menu_pool import menu_pool
 
 class NodeMenu(Menu):
     model_class = None
+    navigation_node_class = NavigationNode
 
     def get_attr(self, node):
         attr = {
@@ -37,7 +38,7 @@ class NodeMenu(Menu):
         return nodes
 
     def node_to_navinode(self, node):
-        n = NavigationNode(
+        n = self.navigation_node_class(
             node.get_menu_title(),
             node.get_absolute_url(),
             node.pk,

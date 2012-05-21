@@ -11,28 +11,31 @@ class NodeAdmin(admin.ModelAdmin):
 
     ordering = ('site', 'tree_id', 'lft',)
     prepopulated_fields = {'slug': ('name',)}
-    wideinput_fields = ('name', 'slug', 'link', 'menu_title', 'menu_extender', 'meta_title', 'meta_keywords', 'template', 'view', 'order_by',)
+    wideinput_fields = ('name', 'slug', 'link', 'menu_title', 'menu_extender',
+                        'meta_title', 'meta_keywords', 'template', 'view', 'order_by',)
     fieldsets = (
-            (None, {
-                'fields': ('name', 'active', 'text')
-            }),
-            (_('path and relation settings'), {
-                'classes': ('collapse',),
-                'fields': ('slug', 'link', 'parent', 'site',)
-            }),
-            (_('menu settings'), {
-                'classes': ('collapse',),
-                'fields': ('menu_title', 'menu_extender', 'menu_in', 'menu_in_chain', 'menu_jump', 'menu_login_required', 'menu_show_current')
-            }),
-            (_('meta settings'), {
-                'classes': ('collapse',),
-                'fields': ('meta_title', 'meta_keywords', 'meta_description',)
-            }),
-            (_('behaviour settings'), {
-                'classes': ('collapse',),
-                'fields': ('behaviour', 'filter', 'filter_date', 'template', 'view', 'order_by', 'onpage')
-            }),
-        )
+        (None, {
+            'fields': ('name', 'active', 'text')
+        }),
+        (_('path and relation settings'), {
+            'classes': ('collapse',),
+            'fields': ('slug', 'link', 'parent', 'site',)
+        }),
+        (_('menu settings'), {
+            'classes': ('collapse',),
+            'fields': ('menu_title', 'menu_extender', 'menu_in', 'menu_in_chain',
+                       'menu_jump', 'menu_login_required', 'menu_show_current')
+        }),
+        (_('meta settings'), {
+            'classes': ('collapse',),
+            'fields': ('meta_title', 'meta_keywords', 'meta_description',)
+        }),
+        (_('behaviour settings'), {
+            'classes': ('collapse',),
+            'fields': ('behaviour', 'filter', 'filter_date', 'template',
+                       'view', 'order_by', 'onpage')
+        }),
+    )
 
     def formfield_for_dbfield(self, db_field, **kwargs):
         formfield = super(NodeAdmin, self).formfield_for_dbfield(db_field, **kwargs)
@@ -54,10 +57,12 @@ class ItemAdmin(admin.ModelAdmin):
     ordering = ('-sort',)
     search_fields = ('name',)
     prepopulated_fields = {'slug': ('name',)}
-    wideinput_fields = ('name', 'slug', 'link', 'meta_title', 'meta_keywords', 'template', 'view',)
+    wideinput_fields = ('name', 'slug', 'link', 'meta_title', 'meta_keywords',
+                        'template', 'view',)
     fieldsets = (
             (None, {
-                'fields': ('active', 'date_start', 'date_end', 'name', 'sort', 'descr', 'text', 'image')
+                'fields': ('active', 'date_start', 'date_end', 'name', 'sort',
+                           'descr', 'text',)
             }),
             (_('path and node settings'), {
                 'classes': ('collapse',),
@@ -69,7 +74,8 @@ class ItemAdmin(admin.ModelAdmin):
             }),
             (_('behaviour settings'), {
                 'classes': ('collapse',),
-                'fields': ('template', 'view', 'visible', 'show_item_name', 'show_node_link', 'show_in_meta',)
+                'fields': ('template', 'view', 'visible', 'show_item_name',
+                           'show_node_link', 'show_in_meta',)
             }),
         )
 
