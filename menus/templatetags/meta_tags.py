@@ -1,7 +1,7 @@
 from django import template
 from django.conf import settings
 from django.utils.translation import ugettext
-from menus.template import simple_tag_ex, inclusion_tag_ex, get_from_context
+from menus.template import inclusion_tag_ex, get_from_context
 
 def show_meta_title(context, main_title='', template="metas/title.html"):
     """render a meta title list into requested template"""
@@ -54,8 +54,8 @@ def show_meta_description(context, main_description='', with_tag=False):
     return description
 
 register = template.Library()
-simple_tag_ex(register, show_meta_current, takes_context=True)
-simple_tag_ex(register, show_meta_keywords, takes_context=True)
-simple_tag_ex(register, show_meta_description, takes_context=True)
+register.simple_tag(takes_context=True)(show_meta_current)
+register.simple_tag(takes_context=True)(show_meta_keywords)
+register.simple_tag(takes_context=True)(show_meta_description)
 inclusion_tag_ex(register, takes_context=True)(show_meta_title)
 inclusion_tag_ex(register, takes_context=True)(show_meta_chain)

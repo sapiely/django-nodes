@@ -1,8 +1,8 @@
-from django import template
-from django.template import Node, generic_tag_compiler, Variable, TemplateSyntaxError
-from django.template.context import Context
-from django.utils.functional import curry
+from functools import partial
 from inspect import getargspec
+from django import template
+from django.template.base import TagHelperNode, Template, generic_tag_compiler
+from django.template.context import Context
 
 def get_from_context(context, variable='request'):
     value = context.get(variable, None)
@@ -10,99 +10,57 @@ def get_from_context(context, variable='request'):
         raise template.VariableDoesNotExist('Variable "%s" does not exists.' % variable)
     return value
 
-def simple_tag_ex(register, func, takes_context=False):
+def inclusion_tag_ex(register, context_class=Context, takes_context=False, name=None):
     """
-    simple_tag_ex decorater: works like original,
-    but takes "takes_context" variable like inclusion_tag
-    requires register as first param
-    """
-
-    params, xx, xxx, defaults = getargspec(func)
-
-    if takes_context:
-        if params[0] == 'context':
-            params = params[1:]
-        else:
-            raise TemplateSyntaxError("Any tag function with takes_context set must have a first argument of 'context'")
-
-    class SimpleNode(Node):
-        def __init__(self, vars_to_resolve):
-            self.vars_to_resolve = map(Variable, vars_to_resolve)
-
-        def render(self, context):
-            resolved_vars = [var.resolve(context) for var in self.vars_to_resolve]
-            if takes_context:
-                return func(context, *resolved_vars)
-            else:
-                return func(*resolved_vars)
-
-    compile_func = curry(generic_tag_compiler, params, defaults, getattr(func, "_decorated_function", func).__name__, SimpleNode)
-    compile_func.__doc__ = func.__doc__
-    register.tag(getattr(func, "_decorated_function", func).__name__, compile_func)
-    return func
-
-def inclusion_tag_ex(register, context_class=Context, takes_context=False, asis_params=False):
-    """
-    inclusion_tag_ex decorater: works like original,
+    inclusion_tag_ex decorator: works like original,
     but takes "file_name" variable from result of function call
-    requires register as first param
-    asis_params do not fetch first 4 params from contexts (for show_menu only)
+    requires register object as first param
+    note: all code ripped from django except "fix:" strings
     """
 
     def dec(func):
-        params, xx, xxx, defaults = getargspec(func)
+        params, varargs, varkw, defaults = getargspec(func)
 
-        if takes_context:
-            if not params[0] == 'context':
-                raise TemplateSyntaxError("Any tag function decorated with takes_context=True must have a first argument of 'context'")
-            params = params[1:]
-
-        class FakeVariable(object):
-            def __init__(self, var):
-                self.var = var
-            def resolve(self, context):
-                return self.var
-
-        def vartype_chooser(val):
-            return (FakeVariable if val and val[0] in ['+', '-', '='] else Variable)(val)
-
-        class InclusionNode(Node):
-
-            def __init__(self, vars_to_resolve):
-                if asis_params:
-                    self.vars_to_resolve = map(vartype_chooser, vars_to_resolve[:4]) + map(Variable, vars_to_resolve[4:])
-                else:
-                    self.vars_to_resolve = map(Variable, vars_to_resolve)
+        class InclusionNode(TagHelperNode):
 
             def render(self, context):
-                resolved_vars = [var.resolve(context) for var in self.vars_to_resolve]
-                if takes_context:
-                    args = [context] + resolved_vars
-                else:
-                    args = resolved_vars
+                resolved_args, resolved_kwargs = self.get_resolved_arguments(context)
+                _dict = func(*resolved_args, **resolved_kwargs)
+                
+                # fix: get template name from func result
+                file_name = _dict.get('template', None)
 
-                extra_context = func(*args)
-                file_name = extra_context.get('template', None)
-                if not file_name:
-                    raise TemplateSyntaxError('Result of fuction, decorated with "inclusion_tag_ex" must contains "template" variable.')
-
-                from django.template.loader import get_template, select_template
-                if not isinstance(file_name, basestring) and is_iterable(file_name):
-                    t = select_template(file_name)
-                else:
-                    t = get_template(file_name)
-                self.nodelist = t.nodelist
-                new_context = context_class(extra_context, autoescape=context.autoescape)
-                # Copy across the CSRF token, if present, because inclusion
-                # tags are often used for forms, and we need instructions
-                # for using CSRF protection to be as simple as possible.
+                if not getattr(self, 'nodelist', False):
+                    from django.template.loader import get_template, select_template
+                    if isinstance(file_name, Template):
+                        t = file_name
+                    elif not isinstance(file_name, basestring) and is_iterable(file_name):
+                        t = select_template(file_name)
+                    else:
+                        t = get_template(file_name)
+                    self.nodelist = t.nodelist
+                new_context = context_class(_dict, **{
+                    'autoescape': context.autoescape,
+                    'current_app': context.current_app,
+                    'use_l10n': context.use_l10n,
+                    'use_tz': context.use_tz,
+                })
+                # Copy across the CSRF token, if present, because
+                # inclusion tags are often used for forms, and we need
+                # instructions for using CSRF protection to be as simple
+                # as possible.
                 csrf_token = context.get('csrf_token', None)
                 if csrf_token is not None:
                     new_context['csrf_token'] = csrf_token
                 return self.nodelist.render(new_context)
 
-        compile_func = curry(generic_tag_compiler, params, defaults, getattr(func, "_decorated_function", func).__name__, InclusionNode)
+        function_name = (name or getattr(func, '_decorated_function', func).__name__)
+        compile_func = partial(generic_tag_compiler, 
+                               params=params, varargs=varargs, varkw=varkw,
+                               defaults=defaults, name=function_name,
+                               takes_context=takes_context, node_class=InclusionNode)
         compile_func.__doc__ = func.__doc__
-        register.tag(getattr(func, "_decorated_function", func).__name__, compile_func)
+        # fix: replace self object with register (not method)
+        register.tag(function_name, compile_func)
         return func
     return dec

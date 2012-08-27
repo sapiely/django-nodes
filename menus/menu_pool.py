@@ -276,6 +276,10 @@ class MenuPool(object):
         ancestors.reverse()
         return ancestors
 
+    def _get_selected(self, nodes):
+        for node in nodes:
+            if node.selected: return node
+
     def _storage_trigger(self, request, nodes, selected):
         """request.meta data inserter trigger"""
         chain = self._get_full_chain(nodes, selected)

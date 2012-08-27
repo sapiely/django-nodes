@@ -23,11 +23,14 @@ def class_by_name_and_type(name, class_type='node'):
     return class_inst
 
 def jump_node_by_node(node):
+
+    # TODO: func get item with no count call 
+    
     """search target node from node with menu_jump"""
     node_from, node_to = node, None
     while True:
-        if node_from.menu_jump and node_from.children.count():
-            node_to = node_from.children.all()[0]
+        if node_from.menu_jump and node_from.children.filter(active=True).count():
+            node_to = node_from.children.filter(active=True)[0]
         if node_to and node_to.menu_jump:
             node_from, node_to = node_to, None
         else:

@@ -2,7 +2,7 @@ from django import template
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.translation import activate, get_language, ugettext
-from menus.template import simple_tag_ex, inclusion_tag_ex, get_from_context
+from menus.template import inclusion_tag_ex, get_from_context
 from menus.menu_pool import menu_pool
 
 def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100,
@@ -157,7 +157,7 @@ def parse_params(nodes, *params):
         params[i] = value if value > 0 else 0
     return params
 
-register    = template.Library()
-load_menu   = register.tag(load_menu)
-inclusion_tag_ex(register, takes_context=True, asis_params=True)(show_menu)
+register = template.Library()
+load_menu = register.tag(load_menu)
+inclusion_tag_ex(register, takes_context=True)(show_menu)
 inclusion_tag_ex(register, takes_context=True)(show_breadcrumb)
