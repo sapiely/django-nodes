@@ -43,16 +43,22 @@ class Node(models.Model):
     # path
     slug                = models.SlugField(_("slug"), max_length=255, db_index=True)
     path                = models.CharField(_("path"), max_length=255, db_index=True, blank=True, editable=False)
-    link                = models.CharField(_("link"), max_length=255, db_index=True, blank=True, help_text=_("overwrite the path to this node (if leading slashes ('/some/url/') - node is only link in menu, else ('some/url') - standart behaviour)"))
+    link                = models.CharField(_("link"), max_length=255, db_index=True, blank=True,
+                                           help_text=_("overwrite the path to this node (if leading slashes "\
+                                                       "('/some/url/') - node is only link in menu, else "\
+                                                       "('some/url') - standart behaviour)"))
 
     # seo
     meta_description    = models.TextField(_("meta description"), max_length=1000, blank=True)
     meta_keywords       = models.CharField(_("meta keywords"), max_length=255, blank=True)
-    meta_title          = models.CharField(_("meta title"), max_length=255, blank=True, help_text=_("overwrite the title (html title tag)"))
+    meta_title          = models.CharField(_("meta title"), max_length=255, blank=True,
+                                           help_text=_("overwrite the title (html title tag)"))
 
     # relations
-    site                = models.ForeignKey(Site, help_text=_('the site the page is accessible at.'), verbose_name=_("site"), default=1)
-    parent              = models.ForeignKey('self', null=True, blank=True, related_name='children', verbose_name=_("node"), db_index=True)
+    site                = models.ForeignKey(Site, verbose_name=_("site"), default=1,
+                                            help_text=_('the site the page is accessible at.'))
+    parent              = models.ForeignKey('self', null=True, blank=True, related_name='children',
+                                            verbose_name=_("node"), db_index=True)
 
     # stat info
     date_create         = models.DateTimeField(editable=False, auto_now_add=True)
@@ -63,19 +69,34 @@ class Node(models.Model):
     filter              = models.CharField(_("filter"),         max_length=20, choices=CHOICES_FILTER,      blank=True)
     filter_date         = models.CharField(_("filter_date"),    max_length=20, choices=CHOICES_FILTER_DATE, blank=True)
 
-    template            = models.CharField(_("template"), max_length=100, blank=True, help_text=_('the template used to render the content instead original'))
-    view                = models.CharField(_("view"), max_length=100, blank=True, help_text=_('the view loaded instead original'))
-    order_by            = models.CharField(_("ordering"), max_length=100, blank=True, help_text=_('overwrite default ordering (default is empty, equal to -date_start -sort, separate strongly with one space char)<br>possible keys: date_start, date_end, sort, name, slug, link'))
-    onpage              = models.PositiveSmallIntegerField(_("onpage"), default=10, help_text=_('perpage count (default=10, 1<=count<=999)'))
+    template            = models.CharField(_("template"), max_length=100, blank=True,
+                                           help_text=_('the template used to render the content instead original'))
+    view                = models.CharField(_("view"), max_length=100, blank=True,
+                                           help_text=_('the view loaded instead original'))
+    order_by            = models.CharField(_("ordering"), max_length=100, blank=True,
+                                           help_text=_("overwrite default ordering (default is empty, "\
+                                                       "equal to -date_start -sort, separate "\
+                                                       "strongly with one space char)<br>possible keys: "\
+                                                       "date_start, date_end, sort, name, slug, link"))
+    onpage              = models.PositiveSmallIntegerField(_("onpage"), default=10,
+                                                           help_text=_('perpage count (default=10, 1<=count<=999)'))
 
     # menu
-    menu_title          = models.CharField(_("menu title"), max_length=255, blank=True, help_text=_("overwrite the title in the menu"))
-    menu_extender       = models.CharField(_("attached menu"), max_length=80, db_index=True, blank=True, help_text=_("menu extender"))
-    menu_in             = models.BooleanField(_("in navigation"), default=True, db_index=True, help_text=_("this node in navigation (menu in?)"))
-    menu_in_chain       = models.BooleanField(_("in chain and title"), default=True, db_index=True, help_text=_("this node in chain and title (chain in?)"))
-    menu_jump           = models.BooleanField(_("jump to first child"), default=False, help_text=_("jump to the first child element if exist (jump?)"))
-    menu_login_required = models.BooleanField(_("menu login required"), default=False, help_text=_("show this page in the menu only if the user is logged in (login?)"))
-    menu_show_current   = models.BooleanField(_("show node name"), default=True, help_text=_('show node name in h1 tag if current (h1 title?)'))
+    menu_title          = models.CharField(_("menu title"), max_length=255, blank=True,
+                                           help_text=_("overwrite the title in the menu"))
+    menu_extender       = models.CharField(_("attached menu"), max_length=80, db_index=True, blank=True,
+                                           help_text=_("menu extender"))
+    menu_in             = models.BooleanField(_("in navigation"), default=True, db_index=True,
+                                              help_text=_("this node in navigation (menu in?)"))
+    menu_in_chain       = models.BooleanField(_("in chain and title"), default=True, db_index=True,
+                                              help_text=_("this node in chain and title (chain in?)"))
+    menu_jump           = models.BooleanField(_("jump to first child"), default=False,
+                                              help_text=_("jump to the first child element if exist (jump?)"))
+    menu_login_required = models.BooleanField(_("menu login required"), default=False,
+                                              help_text=_("show this page in the menu only if "\
+                                                          "the user is logged in (login?)"))
+    menu_show_current   = models.BooleanField(_("show node name"), default=True,
+                                              help_text=_('show node name in h1 tag if current (h1 title?)'))
 
     # tree
     level               = models.PositiveIntegerField(db_index=True, editable=False)
@@ -119,7 +140,8 @@ class Node(models.Model):
 
     def get_order_by(self, default=None):
         fields      = [i.name for i in self.item_set.model._meta.fields]
-        order_by    = [i for i in self.order_by.split(' ') if i.replace('-', '', 1) in fields] if self.order_by else []
+        order_by    = [i for i in self.order_by.split(' ') \
+                        if i.replace('-', '', 1) in fields] if self.order_by else []
         order_by    = order_by or default
         return order_by
 
@@ -130,7 +152,8 @@ class Node(models.Model):
         return self.link.strip('/') if self.link else self.get_path()
 
     def get_absolute_url(self):
-        if self.link and (self.link.startswith('/') or ('://' in self.link and self.link[0:self.link.index('://')].isalpha())):
+        if self.link and (self.link.startswith('/') or \
+                ('://' in self.link and self.link[0:self.link.index('://')].isalpha())):
             return self.link
         path = self.link or self.get_path()
         path = path.strip('/')
@@ -159,19 +182,27 @@ class Item(models.Model):
     # seo
     meta_description    = models.TextField(_("meta description"), max_length=1000, blank=True)
     meta_keywords       = models.CharField(_("meta keywords"), max_length=255, blank=True)
-    meta_title          = models.CharField(_("meta title"), max_length=255, blank=True, help_text=_("overwrite the title (html title tag)"))
+    meta_title          = models.CharField(_("meta title"), max_length=255, blank=True,
+                                           help_text=_("overwrite the title (html title tag)"))
 
     # stat info
     date_create         = models.DateTimeField(editable=False, auto_now_add=True)
     date_update         = models.DateTimeField(editable=False, auto_now=True)
 
     # behaviour
-    template            = models.CharField(_("template"), max_length=100, blank=True, help_text=_('template to render the content instead original'))
-    view                = models.CharField(_("view"), max_length=100, blank=True, help_text=_('alternative view for item detail view'))
-    visible             = models.BooleanField(_("visible"), default=True, help_text=_('show item in items list, also redirect if alone (visible?)'))
-    show_item_name      = models.BooleanField(_("show item name"), default=True, help_text=_('show item name, usually in h2 tag (name?)'))
-    show_node_link      = models.BooleanField(_("show link to node"), default=True, help_text=_('show link to parent node (to list?)'))
-    show_in_meta        = models.BooleanField(_("show in meta"), default=True, help_text=_('show item name in meta title and chain (meta?)'))
+    template            = models.CharField(_("template"), max_length=100, blank=True,
+                                           help_text=_('template to render the content instead original'))
+    view                = models.CharField(_("view"), max_length=100, blank=True,
+                                           help_text=_('alternative view for item detail view'))
+    visible             = models.BooleanField(_("visible"), default=True,
+                                              help_text=_('show item in items list, also redirect '\
+                                                          'if alone (visible?)'))
+    show_item_name      = models.BooleanField(_("show item name"), default=True,
+                                              help_text=_('show item name, usually in h2 tag (name?)'))
+    show_node_link      = models.BooleanField(_("show link to node"), default=True,
+                                              help_text=_('show link to parent node (to list?)'))
+    show_in_meta        = models.BooleanField(_("show in meta"), default=True,
+                                              help_text=_('show item name in meta title and chain (meta?)'))
     # fields end
 
     class Meta:
@@ -193,3 +224,4 @@ class Item(models.Model):
 
     def get_absolute_url_real(self):
         return self.get_absolute_url(use_link=False)
+
