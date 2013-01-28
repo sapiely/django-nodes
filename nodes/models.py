@@ -2,7 +2,8 @@ from django.db import models
 from django.core.urlresolvers import reverse
 from django.contrib.sites.models import Site
 from django.utils.translation import ugettext_lazy as _
-import datetime
+from django.utils import timezone
+
 
 class Node(models.Model):
     """A simple hierarchical node model"""
@@ -25,9 +26,10 @@ class Node(models.Model):
 
     FILTER_HANDLER = {
         'date_req':             lambda q: q & models.Q(date_start__isnull=False),
-        'date_actual':          lambda q: q & models.Q(models.Q(date_start__lte=datetime.datetime.now()) | models.Q(date_start__isnull=True)),
-        'date_actual_both':     lambda q: q & models.Q(models.Q(date_start__lte=datetime.datetime.now()) | models.Q(date_start__isnull=True), models.Q(date_end__gte=datetime.datetime.now()) | models.Q(date_end__isnull=True)),
-        'date_anounce':         lambda q: q & models.Q(date_start__gte=datetime.datetime.now()),
+        'date_actual':          lambda q: q & models.Q(models.Q(date_start__lte=timezone.now()) | models.Q(date_start__isnull=True)),
+        'date_actual_both':     lambda q: q & models.Q(models.Q(date_start__lte=timezone.now()) | models.Q(date_start__isnull=True),\
+                                                       models.Q(date_end__gte=timezone.now()) | models.Q(date_end__isnull=True)),
+        'date_anounce':         lambda q: q & models.Q(date_start__gte=timezone.now()),
     }
 
     # fields start
