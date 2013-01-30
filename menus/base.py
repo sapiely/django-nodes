@@ -2,6 +2,11 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import get_language
 from django.utils.encoding import smart_str
 
+# exceptions
+class NamespaceAllreadyRegistered(Exception):
+    pass
+
+# menus classes
 class Menu(object):
     """blank menu class"""
     namespace, index = None, 500
@@ -14,7 +19,7 @@ class Menu(object):
 
 class Modifier(object):
     """blank modifier class"""
-    modify_rule = 'every_time'
+    modify_rule = 'every_time' # once, every_time, per_request
 
     def modify(self, request, nodes, namespace, id, post_cut, meta):
         raise NotImplementedError
@@ -51,32 +56,36 @@ class NavigationNode(object):
     url                 = None
     id                  = None
     parent_id           = None
-    attr                = None
 
     visible             = True
     visible_chain       = True
 
     parent              = None # do not touch
     namespace           = None
+    attr                = None
 
     meta_title          = None
     meta_keywords       = None
     meta_description    = None
 
-    def __init__(self, title, url, id, parent_id=None, attr=None,
-                  visible=True, visible_chain=True,
+    def __init__(self, title, url, id, parent_id=None,
+                  visible=True, visible_chain=True, attr=None,
                    meta_title='', meta_keywords='', meta_description=''):
-        self.children           = [] # do not touch
         self.title              = title
         self.url                = url
+        self.url_original       = url
+
         self.id                 = id
         self.parent_id          = parent_id
+        self.children           = [] # do not touch
+        self.attr               = attr or {}
+
         self.visible            = visible
         self.visible_chain      = visible_chain
+
         self.meta_title         = meta_title
         self.meta_keywords      = meta_keywords
         self.meta_description   = meta_description
-        self.attr               = attr or {}
 
     def __repr__(self):
         return "<Navigation Node: %s>" % smart_str(self.title)

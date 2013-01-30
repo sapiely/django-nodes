@@ -6,9 +6,12 @@ import pytils, os
 
 class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
-        make_option('-f', '--file', dest='filename', default=None, help='Full path to file for parsing.'),
-        make_option('-n', '--nodetype', dest='nodetype', default='NodeMain', help='Name of node model, default NodeMain.'),
-        make_option('-t', '--testmode', dest='testmode', default='true', help='Testmode flag, must be "false" to disable test mode.'),
+        make_option('-f', '--file', dest='filename', default=None,
+                    help='Full path to file for parsing.'),
+        make_option('-n', '--nodetype', dest='nodetype', default='NodeMain',
+                    help='Name of node model, default NodeMain.'),
+        make_option('-t', '--testmode', dest='testmode', default='true',
+                    help='Testmode flag, must be "false" to disable test mode.'),
     )
 
     def handle(self, *args, **options):
@@ -30,7 +33,8 @@ class Command(BaseCommand):
             return None
 
         data = open(filename, 'r')
-        root = {'kwargs': {'name':'import_root', 'slug':'import_root',}, 'nodes': [], 'level': 0,}
+        root = {'kwargs': {'name':'import_root', 'slug':'import_root',},
+                'nodes': [], 'level': 0,}
         chain = [root]
 
         # parser code
@@ -67,7 +71,8 @@ class Command(BaseCommand):
                 # fallback
                 chain = chain[:level]
 
-            node = {'kwargs': {'name': line, 'slug': pytils.translit.slugify(line),}, 'nodes': [], 'level': level,}
+            node = {'kwargs': {'name': line, 'slug': pytils.translit.slugify(line),},
+                    'nodes': [], 'level': level,}
             # add new node as child in parent
             chain[-1]['nodes'].append(node)
             # add new node to chain

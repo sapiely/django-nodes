@@ -2,15 +2,18 @@ from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.cache import cache
 from django.utils.translation import get_language
-from toolbox import NamespaceAllreadyRegistered, cache_key_tool, \
-                    meta_to_request, import_setting, import_path
+from .base import NamespaceAllreadyRegistered
+from .utils import meta_to_request, cache_key_generator, setting_importable
 import copy, urlparse
 
 # get settings
-CHECK_URL_DOMAIN    = import_setting('MENUS_CHECK_URL_DOMAIN', lambda domain, node: False)
-MODIFIERS_REG       = import_setting('MENUS_MODIFIERS_REG', None)
+CHECK_URL_DOMAIN    = setting_importable('MENUS_CHECK_URL_DOMAIN', 
+                                         lambda domain, node: False)
+MODIFIERS_REG       = setting_importable('MENUS_MODIFIERS_REG', None)
+PATH_COMPARE        = setting_importable('MENUS_PATH_COMPARE', None)
 CACHE_DURATION      = getattr(settings, 'MENUS_CACHE_DURATION', 600)
 MENUS_APPS          = getattr(settings, 'MENUS_APPS', None)
+
 
 class MenuPool(object):
     def __init__(self):
@@ -41,7 +44,7 @@ class MenuPool(object):
             return lok and sok
         to_be_deleted = []
         for key in self.cache_keys:
-            keylang, keysite = cache_key_tool(key=key)
+            keylang, keysite = cache_key_generator(key=key)
             if relevance_test(keylang, keysite):
                 to_be_deleted.append(key)
         cache.delete_many(to_be_deleted)
@@ -51,7 +54,8 @@ class MenuPool(object):
         from base import Menu
         assert issubclass(menu, Menu)
         if menu.__name__ in self.menus.keys():
-            raise NamespaceAllreadyRegistered, '[%s] a menu with this name is already registered' % menu.__name__
+            raise NamespaceAllreadyRegistered, '[%s] a menu with this name is already ' \
+                                               'registered' % menu.__name__
         self.menus[menu.__name__] = menu()
 
     def register_modifier(self, modifier_class):
@@ -69,7 +73,8 @@ class MenuPool(object):
     def clear_modifiers(self):
         self.modifiers = []
 
-    def get_nodes(self, request, namespace=None, root_id=None, site_id=None, init_only=False):
+    def get_nodes(self, request, namespace=None, root_id=None, 
+                                  site_id=None, init_only=False):
         # prepare request
         meta_to_request(request)
 
@@ -81,7 +86,8 @@ class MenuPool(object):
             self.discover_menus()
 
             # cached nodes list selection
-            cache_key = cache_key_tool(get_language(), site_id or Site.objects.get_current().pk, request)
+            cache_key = cache_key_generator(get_language(), 
+                                             site_id or Site.objects.get_current().pk, request)
             self.cache_keys.add(cache_key)
             nodes, paths = cache.get(cache_key, (None,)*2)
             if not nodes:
@@ -102,7 +108,8 @@ class MenuPool(object):
             nodes, meta = self._nodes_in_root(nodes, root_id), {'modified_ancestors': True}
         return self.apply_modifiers(nodes, request, namespace, root_id, post_cut=False, meta=meta)
 
-    def apply_modifiers(self, nodes, request, namespace=None, root_id=None, post_cut=False, meta=None, modify_rule='every_time'):
+    def apply_modifiers(self, nodes, request, namespace=None, root_id=None, post_cut=False, 
+                                               meta=None, modify_rule='every_time'):
         meta, meta['modify_rule'] = meta or {}, modify_rule
         for cls in self.modifiers:
             if not modify_rule in cls.modify_rule: continue
@@ -193,12 +200,15 @@ class MenuPool(object):
 
     # maximize selection speed with paths dict
     def _get_path(self, node):
-        p = urlparse.urlparse(node.url)
+        p = urlparse.urlparse(node.url_original)
         if p.netloc and not CHECK_URL_DOMAIN(p.netloc, node):
             return None, False
         return p.path.strip('/').split('/'), not bool(p.params or p.query or p.fragment)
 
-    def _better_path(self, path, clean, ppath, pclean):
+    def _better_path(self, path, clean, node, ppath, pclean, pnode):
+        if PATH_COMPARE and callable(PATH_COMPARE):
+            return PATH_COMPARE(path, clean, node, ppath, pclean, pnode, menupool=self)
+
         return len(path) < len(ppath) or (len(path) == len(ppath) and clean >= pclean)
 
     def _build_paths(self, nodes):
@@ -212,7 +222,7 @@ class MenuPool(object):
                 if data.has_key(item):
                     # check this node better match than previous
                     ppath, pclean = self._get_path(data[item])
-                    if self._better_path(path, clean, ppath, pclean):
+                    if self._better_path(path, clean, node, ppath, pclean, data[item]):
                         data[item] = node
                 else:
                     # link path with node
@@ -286,7 +296,8 @@ class MenuPool(object):
         request.meta.current = selected
         if chain:
             # storage meta data
-            request.meta.chain = [{'name':n.title, 'link':n.url, 'attr':n.attr} for n in chain] + request.meta.chain
+            request.meta.chain = [{'name': n.title, 'link': n.url, 
+                                   'attr': n.attr,} for n in chain] + request.meta.chain
             request.meta.title = [n.meta_title for n in chain] + request.meta.title
             request.meta.keywords = [chain[-1].meta_keywords] + request.meta.keywords
             request.meta.description = [chain[-1].meta_description] + request.meta.description

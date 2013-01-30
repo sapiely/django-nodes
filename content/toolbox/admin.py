@@ -32,16 +32,12 @@ class NodeNiceAdmin(CacheClearAdmin, MpttTreeAdmin, FkeyMpttAdmin, NodeAdmin):
         )
 
 class ItemNiceAdmin(AjaxBoolAdmin, FkeyListAdmin, ItemAdmin):
-    # add to display ajax booleans and image_tag
+    # add to display ajax booleans
     list_display = (
-        'name', 'id', 'slug', 'sort', 'image_tag',
+        'name', 'id', 'slug', 'sort',
         'toggle_active', 'toggle_visible', 'toggle_show_item_name',
         'toggle_show_node_link', 'toggle_show_in_meta',
     )
-
-    # add image field to first section
-    fieldsets = copy.copy(ItemAdmin.fieldsets)
-    fieldsets[0][1]['fields'] += ('image',)
 
     # mptt_tree ajax boolean
     toggle_active           = ajax_boolean('active', 'active?')

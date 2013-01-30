@@ -1,19 +1,13 @@
 from django.contrib import admin
 from sakkada.admin.editors.tinymce import EditorAdmin
 from toolbox.admin import NodeNiceAdmin, ItemNiceAdmin
-from models import NodeMain, ItemMain, ItemImageMain
+from models import NodeMain, ItemMain
 
 # Main node admin
 class NodeMainAdmin(EditorAdmin, NodeNiceAdmin):
     tinymce_fields = ['text']
 
-class ItemImageMainInline(admin.TabularInline):
-    model = ItemImageMain
-    classes = ['collapse']
-    extra = 3
-
 class ItemMainAdmin(EditorAdmin, ItemNiceAdmin):
-    inlines = [ItemImageMainInline]
     tinymce_fields = ['descr', 'text']
 
 admin.site.register(NodeMain, NodeMainAdmin)

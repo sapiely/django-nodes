@@ -60,7 +60,9 @@ def inclusion_tag_ex(register, context_class=Context, takes_context=False, name=
                                defaults=defaults, name=function_name,
                                takes_context=takes_context, node_class=InclusionNode)
         compile_func.__doc__ = func.__doc__
+
         # fix: replace self object with register (not method)
         register.tag(function_name, compile_func)
+
         return func
     return dec

@@ -4,7 +4,6 @@ from django.contrib.sites.models import Site
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 
-
 class Node(models.Model):
     """A simple hierarchical node model"""
 
@@ -27,7 +26,7 @@ class Node(models.Model):
     FILTER_HANDLER = {
         'date_req':             lambda q: q & models.Q(date_start__isnull=False),
         'date_actual':          lambda q: q & models.Q(models.Q(date_start__lte=timezone.now()) | models.Q(date_start__isnull=True)),
-        'date_actual_both':     lambda q: q & models.Q(models.Q(date_start__lte=timezone.now()) | models.Q(date_start__isnull=True),\
+        'date_actual_both':     lambda q: q & models.Q(models.Q(date_start__lte=timezone.now()) | models.Q(date_start__isnull=True), \
                                                        models.Q(date_end__gte=timezone.now()) | models.Q(date_end__isnull=True)),
         'date_anounce':         lambda q: q & models.Q(date_start__gte=timezone.now()),
     }
@@ -44,8 +43,8 @@ class Node(models.Model):
     slug                = models.SlugField(_("slug"), max_length=255, db_index=True)
     path                = models.CharField(_("path"), max_length=255, db_index=True, blank=True, editable=False)
     link                = models.CharField(_("link"), max_length=255, db_index=True, blank=True,
-                                           help_text=_("overwrite the path to this node (if leading slashes "\
-                                                       "('/some/url/') - node is only link in menu, else "\
+                                           help_text=_("overwrite the path to this node (if leading slashes " \
+                                                       "('/some/url/') - node is only link in menu, else " \
                                                        "('some/url') - standart behaviour)"))
 
     # seo
@@ -74,9 +73,9 @@ class Node(models.Model):
     view                = models.CharField(_("view"), max_length=100, blank=True,
                                            help_text=_('the view loaded instead original'))
     order_by            = models.CharField(_("ordering"), max_length=100, blank=True,
-                                           help_text=_("overwrite default ordering (default is empty, "\
-                                                       "equal to -date_start -sort, separate "\
-                                                       "strongly with one space char)<br>possible keys: "\
+                                           help_text=_("overwrite default ordering (default is empty, " \
+                                                       "equal to -date_start -sort, separate " \
+                                                       "strongly with one space char)<br>possible keys: " \
                                                        "date_start, date_end, sort, name, slug, link"))
     onpage              = models.PositiveSmallIntegerField(_("onpage"), default=10,
                                                            help_text=_('perpage count (default=10, 1<=count<=999)'))
@@ -93,17 +92,9 @@ class Node(models.Model):
     menu_jump           = models.BooleanField(_("jump to first child"), default=False,
                                               help_text=_("jump to the first child element if exist (jump?)"))
     menu_login_required = models.BooleanField(_("menu login required"), default=False,
-                                              help_text=_("show this page in the menu only if "\
-                                                          "the user is logged in (login?)"))
+                                              help_text=_("show in menu only if user is logged in (login?)"))
     menu_show_current   = models.BooleanField(_("show node name"), default=True,
                                               help_text=_('show node name in h1 tag if current (h1 title?)'))
-
-    # tree
-    level               = models.PositiveIntegerField(db_index=True, editable=False)
-    lft                 = models.PositiveIntegerField(db_index=True, editable=False)
-    rght                = models.PositiveIntegerField(db_index=True, editable=False)
-    tree_id             = models.PositiveIntegerField(db_index=True, editable=False)
-    # fields end
 
     class Meta:
         verbose_name        = _('node')
@@ -140,8 +131,8 @@ class Node(models.Model):
 
     def get_order_by(self, default=None):
         fields      = [i.name for i in self.item_set.model._meta.fields]
-        order_by    = [i for i in self.order_by.split(' ') \
-                        if i.replace('-', '', 1) in fields] if self.order_by else []
+        order_by    = [i for i in self.order_by.split(' ') if i.replace('-', '', 1) in fields] \
+                      if self.order_by else []
         order_by    = order_by or default
         return order_by
 
@@ -152,8 +143,8 @@ class Node(models.Model):
         return self.link.strip('/') if self.link else self.get_path()
 
     def get_absolute_url(self):
-        if self.link and (self.link.startswith('/') or \
-                ('://' in self.link and self.link[0:self.link.index('://')].isalpha())):
+        if self.link and (self.link.startswith('/') or ('://' in self.link and \
+                          self.link[0:self.link.index('://')].isalpha())):
             return self.link
         path = self.link or self.get_path()
         path = path.strip('/')
@@ -195,7 +186,7 @@ class Item(models.Model):
     view                = models.CharField(_("view"), max_length=100, blank=True,
                                            help_text=_('alternative view for item detail view'))
     visible             = models.BooleanField(_("visible"), default=True,
-                                              help_text=_('show item in items list, also redirect '\
+                                              help_text=_('show item in items list, also redirect ' \
                                                           'if alone (visible?)'))
     show_item_name      = models.BooleanField(_("show item name"), default=True,
                                               help_text=_('show item name, usually in h2 tag (name?)'))
@@ -218,10 +209,9 @@ class Item(models.Model):
         if use_link and self.link:
             link = self.link
         else:
-            data = {'path': self.node.get_link_or_path().strip('/').__str__(), '_0': 'i/%s/' % self.slug}
+            data = {'path': self.node.get_link_or_path().strip('/').__str__(), '_0': 'i/%s/' % self.slug,}
             link = reverse('nodes_%s' % self.node_name, kwargs=data)
         return link
 
     def get_absolute_url_real(self):
         return self.get_absolute_url(use_link=False)
-
