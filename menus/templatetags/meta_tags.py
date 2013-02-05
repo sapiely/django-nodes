@@ -1,6 +1,4 @@
 from django import template
-from django.conf import settings
-from django.utils.translation import ugettext
 from menus.template import inclusion_tag_ex, get_from_context
 
 def show_meta_title(context, main_title='', template="metas/title.html"):
@@ -33,7 +31,8 @@ def show_meta_current(context, pattern="<h1>%s</h1>"):
     request = get_from_context(context, 'request')
     current = request.meta.current
     pattern = pattern if '%s' in pattern else '%s'
-    return pattern % current.title if current and current.attr.get('show_meta_current', True) else ''
+    return pattern % current.attr.get('title', current.title) \
+                     if current and current.attr.get('show_meta_current', True) else ''
 
 def show_meta_keywords(context, main_keywords='', with_tag=False):
     """shows the meta keywords tag"""

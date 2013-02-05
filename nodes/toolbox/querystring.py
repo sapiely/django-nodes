@@ -35,7 +35,8 @@ class QueryString(object):
         data    = name.rsplit('as__')
         keys    = data[0].strip('__').split('__')[:]
         out     = data[1] if data.__len__() > 1 else 'full'
-        out     = {'format': out[:4] if out[:4] in ['part', 'full', 'self', 'dict'] else 'full', 'left':out.endswith('left')}
+        out     = {'format': out[:4] if out[:4] in ['part', 'full', 'self', 'dict'] else 'full',
+                   'left': out.endswith('left'),}
         query   = self.querydict.copy()
 
         # morph query by action

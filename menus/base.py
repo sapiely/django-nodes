@@ -1,18 +1,80 @@
-from django.core.exceptions import ValidationError
-from django.utils.translation import get_language
 from django.utils.encoding import smart_str
+from .utils import import_path, check_menus_settings
+from .menupool import MenuPool
+from . import settings as msettings
+
+# registry
+class Registry(object):
+    def __init__(self):
+        self.menus = {}
+        self.modifiers = {}
+        self.discovered = False
+        self._menupool = None
+
+    @property
+    def menupool(self):
+        if not self._menupool:
+            menupool = msettings.MENU_POOL and import_path(msettings.MENU_POOL) \
+                                            or MenuPool
+            self._menupool = menupool(self)
+            self.autodiscover() # also autodiscover once
+            # check for settings
+            # todo: check settings
+            check_menus_settings()
+
+        return self._menupool
+
+    def autodiscover(self):
+        if self.discovered: return
+        for app in msettings.MENU_APPS:
+            __import__(app, {}, {}, ['menu'])
+        self.discovered = True
+
+        # register build in modifiers
+        if msettings.BUILDIN_MODIFIERS:
+            from . import modifiers
+            for m in [getattr(modifiers, i) for i in modifiers.__all__]:
+                self.register_modifier(m)
+
+    def register_menu(self, menu):
+        assert issubclass(menu, Menu)
+        menu = menu()
+        if menu.namespace in self.menus:
+            raise NamespaceAllreadyRegistered, 'Menu with name "%s" is already ' \
+                                               'registered' % menu.namespace
+        self.menus[menu.namespace] = menu
+
+    def register_modifier(self, modifier):
+        assert issubclass(modifier, Modifier)
+        if modifier.__name__ in self.modifiers:
+            raise ModifierAllreadyRegistered, 'Modifier with name "%s" is already ' \
+                                              'registered' % menu.__name__
+        self.modifiers[modifier.__name__] = modifier()
+
+    def unregister_modifier(self, modifier):
+        assert issubclass(modifier, Modifier)
+        if modifier.__name__ in self.modifiers:
+            self.modifiers.__delitem__(modifier.__name__)
+
+    def clear_modifiers(self):
+        self.modifiers = {}
 
 # exceptions
 class NamespaceAllreadyRegistered(Exception):
+    pass
+
+class ModifierAllreadyRegistered(Exception):
     pass
 
 # menus classes
 class Menu(object):
     """blank menu class"""
     namespace, index = None, 500
+
     def __init__(self):
         if not self.namespace:
             self.namespace = self.__class__.__name__
+
     def get_nodes(self, request):
         """should return a list of NavigationNode instances"""
         raise NotImplementedError

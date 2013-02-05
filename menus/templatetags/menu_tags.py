@@ -1,13 +1,10 @@
 from django import template
-from django.conf import settings
-from django.core.cache import cache
-from django.utils.translation import activate, get_language, ugettext
 from menus.template import inclusion_tag_ex, get_from_context
-from menus.menu_pool import menu_pool
+from menus import registry
 
 def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100,
-               template=None, namespace=None, root_id=None,
-                show_unvisible=False, show_inactive_branch=False):
+                        template=None, namespace=None, root_id=None,
+                         show_unvisible=False, show_inactive_branch=False, menuconf=None):
     """
     render a nested list of all children of the pages
     - from_level: starting level
@@ -19,29 +16,38 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
     - root_id: the id of the root node
     - show_unvisible: show nodes marked as hidden
     - show_inactive_branch: show nodes in inactive branch (use when from_level > 0)
+    - menuconf: menuconf name, usually retrieve implicitly by routing
     """
 
     # set template by default
     template = template or "menus/menu.html"
     # if there's an exception (500), default context_processors may not be called.
     request = context.get('request', None)
-    if not request: return {'template': 'menus/empty.html'}
-    # get nodes (by root and/or by namespace if defined)
-    nodes = menu_pool.get_nodes(request, namespace, root_id)
+    if not request: return {'template': 'menus/empty.html',}
+
+    # get pre-cut nodes (by menuconf and/or root_id and/or namespace if defined)
+    menuconf = registry.menupool.menuconf(request, name=menuconf)
+    nodes = registry.menupool.get_nodes(menuconf, request, namespace=namespace,
+                                                            root_id=root_id)
     if not nodes: return {'template': template}
 
-    fr_l, to_l, e_in, e_ac = parse_params(nodes, from_level, to_level, extra_inactive, extra_active)
-    children, selected = cut_levels(nodes, fr_l, to_l, e_in, e_ac, show_unvisible, show_inactive_branch)
-    children = menu_pool.apply_modifiers(children, request, namespace, root_id, post_cut=True)
+    # cut levels and apply_modifiers in post_cut mode
+    fr_l, to_l, e_in, e_ac = parse_params(nodes, from_level, to_level,
+                                                  extra_inactive, extra_active)
+    children, selected = cut_levels(nodes, fr_l, to_l, e_in, e_ac, show_unvisible,
+                                                                    show_inactive_branch)
+    children = registry.menupool.apply_modifiers(menuconf, children, request,
+                                                  namespace=namespace, root_id=root_id,
+                                                   post_cut=True)
 
     context.update({'children': children,
-                    'selected': selected,
-                    'template': template,
-                    'namespace': namespace,
-                    'from_level': fr_l,
-                    'to_level': to_l,
-                    'extra_inactive': e_in,
-                    'extra_active': e_ac,})
+                     'selected': selected,
+                      'template': template,
+                       'namespace': namespace,
+                        'from_level': fr_l,
+                         'to_level': to_l,
+                          'extra_inactive': e_in,
+                           'extra_active': e_ac,})
     return context
 
 def show_breadcrumb(context, start_level=0, template="menus/breadcrumb.html"):
@@ -49,14 +55,17 @@ def show_breadcrumb(context, start_level=0, template="menus/breadcrumb.html"):
     Shows the breadcrumb from the node that has the same url as the current request
     - start level: after which level should the breadcrumb start? 0=home
     - template: template used to render the breadcrumb
+    note: this is very native method - use show_meta_chain instead
     """
 
     # if there's an exception (500), default context_processors may not be called.
     request = context.get('request', None)
     if not request: return {'template': 'menus/empty.html'}
 
-    nodes = menu_pool.get_nodes(request)
-    chain = menu_pool._get_full_chain(nodes, menu_pool._get_selected(nodes))
+    menuconf = registry.menupool.menuconf(request)
+    nodes = registry.menupool.get_nodes(menuconf, request)
+    current = registry.menupool._get_selected(nodes)
+    chain = registry.menupool._get_full_chain(nodes, current)
     chain = chain[start_level:] if len(chain) >= start_level else []
     context.update({'chain': chain, 'template': template})
     return context
@@ -66,27 +75,35 @@ def load_menu(parser, token):
     class LoadMenuNode(template.Node):
         def render(self, context):
             request = get_from_context(context, 'request')
-            menu_pool.get_nodes(request, init_only=True)
+            registry.menupool.get_nodes(None, request, init_only=True)
             return ''
     return LoadMenuNode()
 
+# utils
 def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
-                show_unvisible=False, show_inactive_branch=False):
-    """cutting nodes away from menus"""
+                       show_unvisible=False, show_inactive_branch=False):
+    """cutting nodes by levels away from menus, also check visibility, ect"""
+
+    # default values
     final, removed, selected, in_branch = [], {}, None, False
+    # check: show only active branch (see below)
     only_active_branch = not show_inactive_branch and nodes[0].level < from_level
+
+    # main loop
     for node in nodes:
         # ignore nodes, which already is removed
         if node.id in removed: continue
         # check only active branch if some conditions
         if only_active_branch:
-            # node is in selected branch: directry by sel-sib-des attrs or via parent.ancestor
+            # check node is in selected branch: directry by sel-sib-des attrs
+            #                                            or via parent.ancestor
             if not in_branch and node.level == from_level:
-                in_branch = node.descendant or node.parent.ancestor or node.sibling or node.selected
-            # node is out of the selected branch - out of from_level
+                in_branch = node.descendant or node.parent.ancestor \
+                                            or node.sibling or node.selected
+            # node is out of the selected branch, out of from_level > break
             elif in_branch and node.level < from_level:
                 break
-            # ignore left side
+            # just ignore left side relative to selected branch
             if not in_branch:
                 continue
         # remove and ignore nodes that don't have level information
@@ -109,8 +126,12 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         # hide node if required
         if not show_unvisible and not node.visible:
             remove(node, removed)
+
+    # cut active nodes to extra_active (nodes in active branch)
     if selected:
         node.children and cut_after(selected, extra_active, removed)
+
+    # remove marked-for-remove zero-level nodes
     if removed:
         ftemp, final = final, []
         for node in ftemp:
@@ -142,8 +163,10 @@ def parse_params(nodes, *params):
     check = lambda x: not isinstance(x, int) or x < 0
     if not filter(check, params): return params
 
-    current = menu_pool._get_selected(nodes)
+    # todo: optimise selected node retieve, may be cahce it?
+    current = registry.menupool._get_selected(nodes)
     current, params = current.level if current else 0, list(params)
+
     operations = {'+': int.__add__, '-': int.__sub__}
     for i in range(0, len(params)):
         if not check(params[i]): continue
@@ -151,9 +174,9 @@ def parse_params(nodes, *params):
         if param[0] == '=':
             value = current
         else:
-            value, sign = param.strip('+-'), param[0] if param[0] in ['+', '-'] else '+'
+            value = param.strip('+-')
             value = int(value) if value and value.isdigit() else 0
-            value = operations[sign](current, value)
+            value = operations.get(param[0], operations['+'])(current, value)
         params[i] = value if value > 0 else 0
     return params
 

@@ -41,13 +41,15 @@ class NodeAdmin(admin.ModelAdmin):
         formfield = super(NodeAdmin, self).formfield_for_dbfield(db_field, **kwargs)
         # change widget for wideinput_fields directly (not formfield_overrides)
         if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
-            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length, 'size': 100,})
+            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length,
+                                                      'size': 100,})
         return formfield
 
     def get_form(self, request, obj=None, **kwargs):
         form = super(NodeAdmin, self).get_form(request, obj=None, **kwargs)
         # indent tree node titles
-        form.base_fields['parent'].label_from_instance = lambda obj: u'%s %s' % ('. ' * obj.level, obj)
+        form.base_fields['parent'].label_from_instance = lambda obj: u'%s %s' % \
+                                                                     ('. ' * obj.level, obj)
         return form
 
 class ItemAdmin(admin.ModelAdmin):
@@ -83,11 +85,13 @@ class ItemAdmin(admin.ModelAdmin):
         formfield = super(ItemAdmin, self).formfield_for_dbfield(db_field, **kwargs)
         # change widget for wideinput_fields directly (not formfield_overrides)
         if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
-            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length, 'size': 100,})
+            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length,
+                                                      'size': 100,})
         return formfield
 
     def get_form(self, request, obj=None, **kwargs):
         form = super(ItemAdmin, self).get_form(request, obj=None, **kwargs)
         # indent tree node titles
-        form.base_fields['node'].label_from_instance = lambda obj: u'%s %s' % ('. ' * obj.level, obj)
+        form.base_fields['node'].label_from_instance = lambda obj: u'%s %s' % \
+                                                                   ('. ' * obj.level, obj)
         return form

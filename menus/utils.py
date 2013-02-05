@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 def meta_to_request(request):
     """prepare request for menus processing"""
@@ -11,25 +12,8 @@ def meta_to_request(request):
         request.meta.keywords       = []
         request.meta.description    = []
 
-def cache_key_generator(lang, site_id, request, key=None):
-    """
-    returns (language, site ID and cache key) values menu is related to
-    if key is not None, else generate string key from received values
-    """
-    if key:
-        return key.split('_', 3)[1:3]
-    cache_name = getattr(settings, 'MENUS_CACHE_NAME', None)
-    cache_name = cache_name(request) if callable(cache_name) else 'key'
-    return 'menus_%s_%s_%s' % (lang, site_id, cache_name)
-
-def setting_importable(name, default=None):
-    param = getattr(settings, name, default)
-    if isinstance(param, basestring) and '.' in param:
-        param = import_path(param, default)
-    return param
-
-# import module by import_path
 def import_path(import_path, alternate=None):
+    """import module by import_path"""
     from django.utils.importlib import import_module
     try:
         module_name, value_name = import_path.rsplit('.', 1)
@@ -40,3 +24,50 @@ def import_path(import_path, alternate=None):
     except AttributeError:
         value_name = alternate
     return value_name
+
+def check_menus_settings():
+    """check menus settings validity"""
+
+    # get menu settings for check
+    from . import settings as msettings
+    MENU_CONF = msettings.MENU_CONF
+    DEFAULT_SCHEME = msettings.DEFAULT_SCHEME
+
+    # todo: may be someway disable menus if improperly configured
+    if not isinstance(MENU_CONF, dict) or not MENU_CONF.has_key('default'):
+        raise ImproperlyConfigured('Menus "MENU_CONF" setting value is empty/incorrect'
+                                   ' or not contains "default" key.')
+
+    validvalue = lambda value, check: set(value).__len__() == value.__len__() \
+                                      and all([v in check for v in value])
+    errors = {}
+
+    from . import registry
+    for name, value in MENU_CONF.items():
+
+        # check menus value
+        menus = value.get('MENUS', None)
+        if not menus or not validvalue(menus, registry.menus.keys()):
+            errors[name] = 'Menus "%s" MENUS value (%s) is invalid.' % (name, menus)
+            continue
+
+        # check modifiers value
+        modifiers = value.get('MODIFIERS', None)
+        if not isinstance(modifiers, (list, tuple,)):
+            modifkeys = registry.modifiers.keys()
+            modifiers = [m for m in DEFAULT_SCHEME['MODIFIERS'] if m in modifkeys]
+        if modifiers and not validvalue(modifiers, registry.modifiers.keys()):
+            errors[name] = 'Menus "%s" MODIFIERS value (%s) is invalid.' % (name, modifiers)
+            continue
+
+        # update conf value (alos with defaults)
+        value.update({
+            'MODIFIERS': modifiers,
+            'NAME': name,
+            'CACHE_TIMEOUT': value.get('CACHE_TIMEOUT', DEFAULT_SCHEME['CACHE_TIMEOUT']),
+            'CURRENT': False,
+        })
+
+    # raise if errors
+    if errors:
+        raise ImproperlyConfigured('\n'.join(errors.values()))

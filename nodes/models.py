@@ -31,6 +31,8 @@ class Node(models.Model):
         'date_anounce':         lambda q: q & models.Q(date_start__gte=timezone.now()),
     }
 
+    node_name = None
+
     # fields start
     # data
     name                = models.CharField(_("name"), max_length=2000)
@@ -155,6 +157,8 @@ class Node(models.Model):
 
 class Item(models.Model):
     """A simple node's item model"""
+
+    node_name = None
 
     # fields start
     # data

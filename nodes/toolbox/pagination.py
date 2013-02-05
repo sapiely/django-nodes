@@ -9,7 +9,8 @@ class PaginationBase(object):
     def __init__(self, page, paginate=True):
         if isinstance(page, dict):
             pages   = page.get('pages') or 1 if page.has_key('pages') else None
-            pages   = pages or (page['count']//page['perpage'] + (page['count'] % page['perpage'] and 1))
+            pages   = pages or (page['count']//page['perpage'] \
+                                + (page['count'] % page['perpage'] and 1))
             number  = page['page'] if 1 <= page['page'] <= pages else 1
         else:
             pages   = page.paginator.num_pages

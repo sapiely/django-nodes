@@ -1,8 +1,8 @@
-from functools import partial
-from inspect import getargspec
-from django import template
 from django.template.base import TagHelperNode, Template, generic_tag_compiler
 from django.template.context import Context
+from django import template
+from functools import partial
+from inspect import getargspec
 
 def get_from_context(context, variable='request'):
     value = context.get(variable, None)
@@ -26,7 +26,7 @@ def inclusion_tag_ex(register, context_class=Context, takes_context=False, name=
             def render(self, context):
                 resolved_args, resolved_kwargs = self.get_resolved_arguments(context)
                 _dict = func(*resolved_args, **resolved_kwargs)
-                
+
                 # fix: get template name from func result
                 file_name = _dict.get('template', None)
 
@@ -55,7 +55,7 @@ def inclusion_tag_ex(register, context_class=Context, takes_context=False, name=
                 return self.nodelist.render(new_context)
 
         function_name = (name or getattr(func, '_decorated_function', func).__name__)
-        compile_func = partial(generic_tag_compiler, 
+        compile_func = partial(generic_tag_compiler,
                                params=params, varargs=varargs, varkw=varkw,
                                defaults=defaults, name=function_name,
                                takes_context=takes_context, node_class=InclusionNode)

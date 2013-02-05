@@ -1,5 +1,6 @@
 from base import Modifier
-from menu_pool import menu_pool
+
+__all__ = ('NavExtender', 'LoginRequired', 'Jump', 'Namespace', 'Level',)
 
 class Namespace(Modifier):
     """fetch nodes by namespace"""
@@ -30,7 +31,8 @@ class Level(Modifier):
 
     def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
         # activate condition
-        if post_cut or ('every_time' == meta['modify_rule'] and not meta.get('modified_ancestors', False)):
+        if post_cut or ('every_time' == meta['modify_rule']
+                        and not meta.get('modified_ancestors', False)):
             return nodes
 
         for node in nodes:
@@ -120,11 +122,3 @@ class NavExtender(Modifier):
             nodes = self.resort_nodes(nodes)
 
         return nodes
-
-def register():
-    # order is important
-    menu_pool.register_modifier(NavExtender)
-    menu_pool.register_modifier(LoginRequired)
-    menu_pool.register_modifier(Jump)
-    menu_pool.register_modifier(Namespace)
-    menu_pool.register_modifier(Level)

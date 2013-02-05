@@ -21,14 +21,18 @@ class NodeNiceAdmin(CacheClearAdmin, MpttTreeAdmin, FkeyMpttAdmin, NodeAdmin):
     toggle_menu_current     = ajax_boolean('menu_show_current', 'h1 title?')
 
     # fkey_list links
-    item_link = fkey_list_link('item', model_set='item_set',  fkey_name='node',   with_add_link=True)
-    node_link = fkey_list_link('node', model_set='children',  fkey_name='parent', with_add_link=True)
+    item_link = fkey_list_link('item', model_set='item_set', fkey_name='node',
+                                                              with_add_link=True)
+    node_link = fkey_list_link('node', model_set='children', fkey_name='parent',
+                                                              with_add_link=True)
 
     # mptt_tree indented title with fkey_list links
     def indented_short_title_text(self, item):
         return '%s %s' % (
-            u'<a href="%s" title="show related elements">%s</a>' % (self.item_link(item, url_only='list'),  unicode(item),),
-            u'<nobr>(<a href="%s/" title="edit &laquo;%s&raquo;">edit</a>)</nobr>' % (item.pk, item.__class__._meta.verbose_name,),
+            u'<a href="%s" title="show related elements">%s</a>' \
+             % (self.item_link(item, url_only='list'),  unicode(item),),
+            u'<nobr>(<a href="%s/" title="edit &laquo;%s&raquo;">edit</a>)</nobr>' \
+             % (item.pk, item.__class__._meta.verbose_name,),
         )
 
 class ItemNiceAdmin(AjaxBoolAdmin, FkeyListAdmin, ItemAdmin):

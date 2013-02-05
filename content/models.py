@@ -15,8 +15,7 @@ class NodeMain(Node):
 class ItemMain(Item):
     node_name               = 'main'
     node                    = models.ForeignKey(NodeMain, help_text=_('Parent node.'),
-                                                related_name='item_set')
-
+                                                           related_name='item_set')
     class Meta:
         verbose_name        = _('main item')
         verbose_name_plural = _('main items')

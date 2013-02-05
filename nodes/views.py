@@ -34,10 +34,15 @@ class NodeView(TemplateView):
 
         # set instance data
         self.node = node
-        self.options = {'filter': filter & Q(visible=True), 'filter_item': filter, 'order_by': order_by,}
+        self.options = {'filter': filter & Q(visible=True),
+                        'filter_item': filter, 'order_by': order_by,}
         self.classes = {'node': Node, 'item': Item}
-        self.queryset       = self.get_item_queryset(Item, 'list').filter(self.options['filter']).order_by(*self.options['order_by'])
-        self.queryset_item  = self.get_item_queryset(Item, 'item').filter(self.options['filter_item'], slug=kwargs['item']) if kwargs['item'] else None
+        self.queryset       = self.get_item_queryset(Item, 'list') \
+                                  .filter(self.options['filter']) \
+                                  .order_by(*self.options['order_by'])
+        self.queryset_item  = self.get_item_queryset(Item, 'item') \
+                                  .filter(self.options['filter_item'], slug=kwargs['item']) \
+                              if kwargs['item'] else None
 
         context = self.behaviour()
         if issubclass(context.__class__, HttpResponse):
@@ -62,8 +67,8 @@ class NodeView(TemplateView):
 
         # if link is defined, access by path + slug is deined
         if node.link and node.link != '/'.join(path):
-            raise Http404(u'Node field link [%s] defined, access by path [%s] denied.' % (node.link, '/'.join(path)))
-
+            raise Http404(u'Node field link [%s] defined, access by path [%s]'
+                          u' denied.' % (node.link, '/'.join(path)))
         return node
 
     def behaviour(self):
@@ -148,7 +153,8 @@ class NodeView(TemplateView):
 
         # storage meta data
         if item.show_in_meta:
-            self.request.meta.chain.append({'link':self.request.get_full_path(), 'name':item.name})
+            self.request.meta.chain.append({'link':self.request.get_full_path(),
+                                            'name':item.name})
             self.request.meta.title.append(item.meta_title or item.name)
             self.request.meta.keywords.append(item.meta_keywords)
             self.request.meta.description.append(item.meta_description)
@@ -164,7 +170,8 @@ class NodeView(TemplateView):
 
     def get_template_names(self):
         if not self.template_name or not isinstance(self.template_name, list):
-            raise Exception(u'Node requires a definition of template_name as list or an implementation of get_template_names()')
+            raise Exception(u'Node requires a definition of template_name as list'
+                            u' or an implementation of get_template_names()')
         return self.template_name
 
     def get_context_data(self, **kwargs):
@@ -172,7 +179,8 @@ class NodeView(TemplateView):
         context.update(self.context_ex)
         return context
 
-    def template_variation(self, tpltype, tplname, tplplaces=[], extention='html', prefix='nodes'):
+    def template_variation(self, tpltype, tplname, tplplaces=[],
+                                  extention='html', prefix='nodes'):
         tplbase = ['%s.%s.%s' % (tpltype, tplname, extention)] if tplname else []
         tplbase.append('%s.%s' % (tpltype, extention))
         tplaces = ['%s/%s/%%s' % (prefix, p) for p in tplplaces] if tplplaces else []
@@ -185,6 +193,7 @@ class NodeView(TemplateView):
         view_ex = getattr(self, view_ex, None)
         view_ex = view_ex if callable(view_ex) else None
         if not view_ex:
-            raise Http404(u'Extra view "%s" for node "%s/%s(%s)" is not accessible.' % (self.node.view, self.node.node_name, self.node.slug, self.node.pk))
+            raise Http404(u'Extra view "%s" for node "%s/%s(%s)" is not accessible.' \
+                          % (self.node.view, self.node.node_name, self.node.slug, self.node.pk))
         response = view_ex(self.request, **self.kwargs)
         return response if issubclass(response.__class__, HttpResponse) else None
