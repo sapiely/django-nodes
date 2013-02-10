@@ -4,7 +4,7 @@ from menus import registry
 
 def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100,
                         template=None, namespace=None, root_id=None,
-                         show_unvisible=False, show_inactive_branch=False, menuconf=None):
+                         show_invisible=False, show_inactive_branch=False, menuconf=None):
     """
     render a nested list of all children of the pages
     - from_level: starting level
@@ -14,7 +14,7 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
     - template: template used to render the menu
     - namespace: the namespace of the menu. if empty will use all namespaces
     - root_id: the id of the root node
-    - show_unvisible: show nodes marked as hidden
+    - show_invisible: show nodes marked as hidden
     - show_inactive_branch: show nodes in inactive branch (use when from_level > 0)
     - menuconf: menuconf name, usually retrieve implicitly by routing
     """
@@ -34,7 +34,7 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
     # cut levels and apply_modifiers in post_cut mode
     fr_l, to_l, e_in, e_ac = parse_params(nodes, from_level, to_level,
                                                   extra_inactive, extra_active)
-    children, selected = cut_levels(nodes, fr_l, to_l, e_in, e_ac, show_unvisible,
+    children, selected = cut_levels(nodes, fr_l, to_l, e_in, e_ac, show_invisible,
                                                                     show_inactive_branch)
     children = registry.menupool.apply_modifiers(menuconf, children, request,
                                                   namespace=namespace, root_id=root_id,
@@ -81,7 +81,7 @@ def load_menu(parser, token):
 
 # utils
 def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
-                       show_unvisible=False, show_inactive_branch=False):
+                       show_invisible=False, show_inactive_branch=False):
     """cutting nodes by levels away from menus, also check visibility, ect"""
 
     # default values
@@ -93,6 +93,15 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
     for node in nodes:
         # ignore nodes, which already is removed
         if node.id in removed: continue
+        # remove and ignore nodes that don't have level information
+        if not hasattr(node, 'level'):
+            remove(node, removed)
+            continue
+        
+        # save selected node
+        if node.selected:
+            selected = node
+
         # check only active branch if some conditions
         if only_active_branch:
             # check node is in selected branch: directry by sel-sib-des attrs
@@ -106,30 +115,26 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
             # just ignore left side relative to selected branch
             if not in_branch:
                 continue
-        # remove and ignore nodes that don't have level information
-        if not hasattr(node, 'level'):
+        # ignore nodes higher then from level
+        elif node.level < from_level:
+            continue
+
+        # remove nodes that are too deep or invisible (show_visible mode is off)
+        if (node.level > to_level) or (not show_invisible and not node.visible):
             remove(node, removed)
             continue
+
+        # cut inactive nodes to extra_inactive (nodes in not active branch)
+        if not (node.selected or node.ancestor or node.descendant) and node.children:
+            cut_after(node, extra_inactive, removed)
         # turn nodes that are on from_level into root nodes
         if node.level == from_level:
             final.append(node)
             node.parent = None
-            # cut inactive nodes to extra_inactive (nodes in not active branch)
-            if not (node.selected or node.ancestor or node.descendant):
-                node.children and cut_after(node, extra_inactive, removed)
-        # remove nodes that are too deep
-        if node.level > to_level:
-            remove(node, removed)
-        # save selected node
-        if node.selected:
-            selected = node
-        # hide node if required
-        if not show_unvisible and not node.visible:
-            remove(node, removed)
 
     # cut active nodes to extra_active (nodes in active branch)
-    if selected:
-        node.children and cut_after(selected, extra_active, removed)
+    if selected and selected.children:
+        cut_after(selected, extra_active, removed)
 
     # remove marked-for-remove zero-level nodes
     if removed:
@@ -142,7 +147,9 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
 
 def cut_after(node, levels, removed):
     """given a tree of nodes cuts after N levels"""
-    if levels == 0:
+    if not node.children:
+        return
+    elif levels <= node.level: # relative to current node
         for n in node.children:
             removed.__setitem__(n.id, None)
             n.children and cut_after(n, 0, removed)
