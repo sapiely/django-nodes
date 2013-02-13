@@ -1,6 +1,7 @@
 from django import template
 from menus.template import inclusion_tag_ex, get_from_context
 from menus import registry
+import re
 
 def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_active=100,
                         template=None, namespace=None, root_id=None,
@@ -29,11 +30,11 @@ def show_menu(context, from_level=0, to_level=100, extra_inactive=0, extra_activ
     menuconf = registry.menupool.menuconf(request, name=menuconf)
     nodes = registry.menupool.get_nodes(menuconf, request, namespace=namespace,
                                                             root_id=root_id)
-    if not nodes: return {'template': template}
+    if not nodes: return {'template': template,}
 
     # cut levels and apply_modifiers in post_cut mode
-    fr_l, to_l, e_in, e_ac = parse_params(nodes, from_level, to_level,
-                                                  extra_inactive, extra_active)
+    fr_l, to_l, e_in, e_ac = parse_params(request, nodes, from_level, to_level,
+                                                           extra_inactive, extra_active)
     children, selected = cut_levels(nodes, fr_l, to_l, e_in, e_ac, show_invisible,
                                                                     show_inactive_branch)
     children = registry.menupool.apply_modifiers(menuconf, children, request,
@@ -97,7 +98,7 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
         if not hasattr(node, 'level'):
             remove(node, removed)
             continue
-        
+
         # save selected node
         if node.selected:
             selected = node
@@ -132,16 +133,19 @@ def cut_levels(nodes, from_level, to_level, extra_inactive, extra_active,
             final.append(node)
             node.parent = None
 
-    # cut active nodes to extra_active (nodes in active branch)
-    if selected and selected.children:
-        cut_after(selected, extra_active, removed)
-
     # remove marked-for-remove zero-level nodes
     if removed:
         ftemp, final = final, []
         for node in ftemp:
             if node.id in removed: continue
             final.append(node)
+
+    # cut active nodes to extra_active (nodes in active branch)
+    if selected and selected.children:
+        cut_after(selected, extra_active, removed)
+    elif not selected:
+        for node in final:
+            node.descendant and cut_after(node, extra_active, removed)
 
     return final, selected
 
@@ -165,26 +169,55 @@ def remove(node, removed):
         node.parent.children.remove(node)
     node.children and cut_after(node, 0, removed)
 
-def parse_params(nodes, *params):
-    """process params with - or + or = if defined"""
-    check = lambda x: not isinstance(x, int) or x < 0
+def parse_params(request, nodes, *params):
+    """
+    process params with +-=, : or @ if defined:
+    [0, 1, 2, 3]    - direct values
+    [:c+1, :co-1, :c-r, :co-ro+1]
+                    - expression of current, current-original,
+                                       root, root-original
+    [+1 -1 =]       - aliases to :c+1 :c-1 :c
+    
+    todo: [@name|+1]- lambda with name and following params:
+                       nodes, request, value param (here is +1)
+    """
+
+    check = lambda x: not (isinstance(x, int) and x >= 0)
+    CHECK = re.compile('^([+-]?(?:ro?|co?|\d))+$')
     if not filter(check, params): return params
 
     # todo: optimise selected node retieve, may be cahce it?
+    root = nodes and nodes[0] or None
     current = registry.menupool._get_selected(nodes)
+
+    # get expression params: current-original, current, root-original, root
+    co = request.meta.current and request.meta.current.level or 0
+    c = current and current.level or 0
+    ro = root and root.attr.get('levelorig', root.level or 0)
+    r = root and root.level or 0
+
+    # current level and params as list for direct assignation
     current, params = current.level if current else 0, list(params)
 
-    operations = {'+': int.__add__, '-': int.__sub__}
+    # process each params
     for i in range(0, len(params)):
         if not check(params[i]): continue
-        param = params[i].__str__()
+        param = params[i].__str__() or '0'
+
+        # alias process
         if param[0] == '=':
-            value = current
+            param = ':c'
+        elif param[0] in '+-':
+            param = ':c%s' % param
+
+        # eval if valid expression else int value
+        if param[0] == ':' and CHECK.match(param[1:]):
+            value = eval(param[1:])
         else:
-            value = param.strip('+-')
-            value = int(value) if value and value.isdigit() else 0
-            value = operations.get(param[0], operations['+'])(current, value)
+            value = int(value) if param.isdigit() else 0
+
         params[i] = value if value > 0 else 0
+
     return params
 
 register = template.Library()

@@ -235,7 +235,7 @@ class MenuPool(object):
         for n in node.children:
             result.append(n)
             if unparent:
-                n.parent = None
+                n.root, n.parent = n.parent, None
             if n.children:
                 result = self._nodes_after_node(n, result)
         return result

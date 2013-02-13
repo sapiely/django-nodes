@@ -26,7 +26,7 @@ class Namespace(Modifier):
         return nodes
 
 class Level(Modifier):
-    """marks all node levels"""
+    """marks all node levels + save original level at once"""
     modify_rule = ('once', 'every_time',)
 
     def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
@@ -39,6 +39,12 @@ class Level(Modifier):
             if not node.parent:
                 node.level = 0
                 self.mark_levels(node)
+        
+        # save original level in attr
+        if 'once' == meta['modify_rule']:
+            for n in nodes:
+                n.attr['levelorig'] = n.level
+
         return nodes
 
     def mark_levels(self, node):
