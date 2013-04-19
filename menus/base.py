@@ -18,9 +18,13 @@ class Registry(object):
                                             or MenuPool
             self._menupool = menupool(self)
             self.autodiscover() # also autodiscover once
-            # check for settings
-            # todo: check settings
-            check_menus_settings()
+
+            # check settings correctness
+            try:
+                check_menus_settings()
+            except:
+                self._menupool = None
+                raise
 
         return self._menupool
 

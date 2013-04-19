@@ -3,7 +3,7 @@ from django.core.cache import cache
 from django.utils.translation import get_language
 from .utils import meta_to_request
 from . import settings as msettings
-import copy, urlparse
+import copy, urlparse, re
 
 class MenuPool(object):
 
@@ -22,6 +22,10 @@ class MenuPool(object):
         self._modifiers = {}
 
     def router(self, request):
+        for route, conf in msettings.MENU_ROUTES:
+            if re.match(route, request.path):
+                return conf
+
         return 'default'
 
     def menuconf(self, request, name=None):
@@ -223,7 +227,7 @@ class MenuPool(object):
         """get nodes in node with reverse_id == root_id"""
         new_nodes = []
         for node in nodes:
-            if node.attr.get('reverse_id', None) == root_id:
+            if node.attr.get('reverse_id', node.id) == root_id:
                 new_nodes = self._nodes_after_node(node, [], unparent=True)
                 break
 
