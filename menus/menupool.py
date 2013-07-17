@@ -12,7 +12,7 @@ class MenuPool(object):
     #   check_node_url_with_domain - check urls with domain specified
     #   compare_path - compare two paths by length, get/hash existance, ect
     #   request_meta_processor - how to insert sel-anc nodes to meta container
-    #   cache_key - cahce name generator for confname
+    #   cache_key - cache name generator for confname
 
     registry = None
 
