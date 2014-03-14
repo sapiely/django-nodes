@@ -34,22 +34,24 @@ def show_meta_current(context, pattern="<h1>%s</h1>"):
     return pattern % current.attr.get('title', current.title) \
                      if current and current.attr.get('show_meta_current', True) else ''
 
-def show_meta_keywords(context, main_keywords='', with_tag=False):
+def show_meta_keywords(context, main_keywords='', with_tag=False, as_default=True):
     """shows the meta keywords tag"""
     request     = get_from_context(context, 'request')
     keywords    = [main_keywords] if main_keywords else []
-    keywords   += request.meta.keywords
-    keywords    = ''.join([(' %s' % i.encode('utf8') if i else '') for i in keywords]).strip()
-    keywords    = '<meta name="keywords" content="%s" />' % keywords if keywords and with_tag else keywords
+    keywords    = (request.meta.keywords or keywords
+                    if as_default else keywords + request.meta.keywords)
+    keywords    = u''.join([(u' %s' % i if i else u'') for i in keywords]).strip()
+    keywords    = u'<meta name="keywords" content="%s" />' % keywords if keywords and with_tag else keywords
     return keywords
 
-def show_meta_description(context, main_description='', with_tag=False):
+def show_meta_description(context, main_description='', with_tag=False, as_default=True):
     """shows the meta description tag"""
     request         = get_from_context(context, 'request')
     description     = [main_description] if main_description else []
-    description    += request.meta.description
-    description     = ''.join([(' %s' % i.encode('utf8') if i else '') for i in description]).strip()
-    description     = '<meta name="description" content="%s" />' % description if description and with_tag else description
+    description     = (request.meta.description or description
+                        if as_default else description + request.meta.description)
+    description     = u''.join([(u' %s' % i if i else u'') for i in description]).strip()
+    description     = u'<meta name="description" content="%s" />' % description if description and with_tag else description
     return description
 
 register = template.Library()
