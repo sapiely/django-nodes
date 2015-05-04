@@ -35,7 +35,7 @@ class Registry(object):
         self.discovered = True
 
         # register build in modifiers
-        if msettings.BUILDIN_MODIFIERS:
+        if msettings.BUILTIN_MODIFIERS:
             from . import modifiers
             for m in [getattr(modifiers, i) for i in modifiers.__all__]:
                 self.register_modifier(m)

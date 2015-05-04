@@ -1,5 +1,5 @@
 from django import template
-from menus.template import inclusion_tag_ex, get_from_context
+from menus.template import inclusion_tag, get_from_context
 from menus import registry
 import re
 
@@ -222,5 +222,5 @@ def parse_params(request, nodes, *params):
 
 register = template.Library()
 load_menu = register.tag(load_menu)
-inclusion_tag_ex(register, takes_context=True)(show_menu)
-inclusion_tag_ex(register, takes_context=True)(show_breadcrumb)
+inclusion_tag(register, takes_context=True)(show_menu)
+inclusion_tag(register, takes_context=True)(show_breadcrumb)

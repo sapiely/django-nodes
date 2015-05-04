@@ -3,9 +3,10 @@ from django.core.paginator import Paginator, InvalidPage, EmptyPage
 from django.views.generic import TemplateView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from toolbox import class_by_name_and_type, jump_node_by_node, meta_to_request
-from toolbox.pagination import Pagination
-from toolbox.querystring import QueryString
+from utils import class_by_name_and_type, jump_node_by_node, meta_to_request
+from utils.pagination import Pagination
+from utils.querystring import QueryString
+
 
 class NodeView(TemplateView):
     node = None
@@ -14,16 +15,25 @@ class NodeView(TemplateView):
     queryset_item = None
     options = {}
     classes = {}
-    context_ex = {}
+    extra_context = {}
     pagination = Pagination
+
+    def dispatch(self, request, *args, **kwargs):
+        # update kwarg: set item kwarg to None by default
+        self.kwargs['item'] = kwargs['item'] = self.kwargs.get('item', None)
+
+        return super(NodeView, self).dispatch(request, *args, **kwargs)
 
     def get(self, request, **kwargs):
         """get node data and call required view (node, list or item) or 404"""
         meta_to_request(request)
 
+        node_name = self.kwargs['node_name']
+        item_slug = self.kwargs['item']
+
         # get models
-        Node = class_by_name_and_type(self.kwargs['node_name'], 'node')
-        Item = class_by_name_and_type(self.kwargs['node_name'], 'item')
+        Node = class_by_name_and_type(node_name, 'node')
+        Item = class_by_name_and_type(node_name, 'item')
 
         # get current node
         node = self.get_node(Node)
@@ -37,12 +47,14 @@ class NodeView(TemplateView):
         self.options = {'filter': filter & Q(visible=True),
                         'filter_item': filter, 'order_by': order_by,}
         self.classes = {'node': Node, 'item': Item}
-        self.queryset       = self.get_item_queryset(Item, 'list') \
-                                  .filter(self.options['filter']) \
-                                  .order_by(*self.options['order_by'])
-        self.queryset_item  = self.get_item_queryset(Item, 'item') \
-                                  .filter(self.options['filter_item'], slug=kwargs['item']) \
-                              if kwargs['item'] else None
+        self.queryset       = (self.get_item_queryset(Item, 'list')
+                                   .filter(self.options['filter'])
+                                   .order_by(*self.options['order_by']))
+
+        self.queryset_item  = (self.get_item_queryset(Item, 'item')
+                                   .filter(self.options['filter_item'],
+                                           slug=item_slug)
+                               if item_slug else None)
 
         context = self.behaviour()
         if issubclass(context.__class__, HttpResponse):
@@ -176,7 +188,7 @@ class NodeView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = kwargs
-        context.update(self.context_ex)
+        context.update(self.extra_context)
         return context
 
     def template_variation(self, tpltype, tplname, tplplaces=[],

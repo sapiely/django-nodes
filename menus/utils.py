@@ -45,7 +45,6 @@ def check_menus_settings():
 
     errors = {}
     for name, value in MENU_CONF.items():
-
         # check menus value
         menus = value.get('MENUS', None)
         if not menus or not validvalue(menus, registry.menus.keys()):

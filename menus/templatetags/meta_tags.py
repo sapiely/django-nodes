@@ -1,5 +1,5 @@
 from django import template
-from menus.template import inclusion_tag_ex, get_from_context
+from menus.template import inclusion_tag, get_from_context
 
 def show_meta_title(context, main_title='', template="metas/title.html"):
     """render a meta title list into requested template"""
@@ -58,5 +58,5 @@ register = template.Library()
 register.simple_tag(takes_context=True)(show_meta_current)
 register.simple_tag(takes_context=True)(show_meta_keywords)
 register.simple_tag(takes_context=True)(show_meta_description)
-inclusion_tag_ex(register, takes_context=True)(show_meta_title)
-inclusion_tag_ex(register, takes_context=True)(show_meta_chain)
+inclusion_tag(register, takes_context=True)(show_meta_title)
+inclusion_tag(register, takes_context=True)(show_meta_chain)

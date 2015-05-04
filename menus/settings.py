@@ -3,7 +3,7 @@ from django.conf import settings
 """
 # menus sample settings
 MENUS_APPS = ['content',]
-MENUS_BUILDIN_MODIFIERS = True
+MENUS_BUILTIN_MODIFIERS = True
 MENUS_MENUPOOL = 'application.menu.MenuPool'
 MENUS_ROUTES = (
     ('^(/some/url/|/another/)', 'simple',),
@@ -29,7 +29,7 @@ DEFAULT_SCHEME = {
 }
 
 MENU_APPS           = getattr(settings, 'MENUS_APPS', None)
-BUILDIN_MODIFIERS   = getattr(settings, 'MENUS_BUILDIN_MODIFIERS', True)
+BUILTIN_MODIFIERS   = getattr(settings, 'MENUS_BUILTIN_MODIFIERS', True)
 MENU_POOL           = getattr(settings, 'MENUS_MENUPOOL', None)
 MENU_CONF           = getattr(settings, 'MENUS', None)
 MENU_ROUTES         = getattr(settings, 'MENUS_ROUTES', None) or []

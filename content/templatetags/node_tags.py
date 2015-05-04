@@ -1,6 +1,6 @@
 from django import template
 from django.db import models
-from menus.template import inclusion_tag_ex
+from menus.template import inclusion_tag
 from nodes.models import Node, Item
 import re
 
@@ -54,7 +54,7 @@ def show_item(context, model=None, item_id=None, template=None):
                 "nodes/tags/item.{template or item_slug}.html"
     """
     request, model = context.get('request', None), nodes_model(model, Item)
-    if not request or not item_id:
+    if not request or not model or not item_id:
         return {'template': EMPTY_TEMPLATE,}
 
     idfilter = {'pk' if isinstance(item_id, int) else 'slug': item_id,}
@@ -99,5 +99,5 @@ def nodes_model(name, parent):
             return i
 
 register = template.Library()
-inclusion_tag_ex(register, takes_context=True)(show_node)
-inclusion_tag_ex(register, takes_context=True)(show_item)
+inclusion_tag(register, takes_context=True)(show_node)
+inclusion_tag(register, takes_context=True)(show_item)
