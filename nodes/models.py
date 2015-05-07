@@ -213,7 +213,8 @@ class Item(models.Model):
         if use_link and self.link:
             link = self.link
         else:
-            data = {'path': self.node.get_link_or_path().strip('/').__str__(), '_0': 'i/%s/' % self.slug,}
+            data = {'path': self.node.get_link_or_path().strip('/').__str__(),
+                    'item': self.slug,}
             link = reverse('nodes_%s' % self.node_name, kwargs=data)
         return link
 
