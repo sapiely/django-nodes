@@ -87,7 +87,7 @@ class Modifier(object):
     """blank modifier class"""
     modify_rule = 'every_time' # once, every_time, per_request
 
-    def modify(self, request, nodes, namespace, id, post_cut, meta):
+    def modify(self, request, nodes, namespace, id, post_cut, meta, **kwargs):
         raise NotImplementedError
 
     def remove_children(self, node, nodes):

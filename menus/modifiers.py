@@ -6,7 +6,7 @@ class Namespace(Modifier):
     """fetch nodes by namespace"""
     modify_rule = ('every_time',)
 
-    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
+    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}, **kwargs):
         # activate condition
         if not namespace or post_cut:
             return nodes
@@ -29,7 +29,7 @@ class Level(Modifier):
     """marks all node levels + save original level at once"""
     modify_rule = ('once', 'every_time',)
 
-    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
+    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}, **kwargs):
         # activate condition
         if post_cut or ('every_time' == meta['modify_rule']
                         and not meta.get('modified_ancestors', False)):
@@ -56,7 +56,7 @@ class Jump(Modifier):
     """Clone child link to parent if parent is marked as jump"""
     modify_rule = ('once', 'per_request',)
 
-    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
+    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}, **kwargs):
         # activate condition
         if 'per_request' == meta['modify_rule'] and not meta.get('modified_descendants', False):
             return nodes
@@ -84,7 +84,7 @@ class LoginRequired(Modifier):
     """Remove nodes that are login required or require a group"""
     modify_rule = ('per_request',)
 
-    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
+    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}, **kwargs):
         # activate condition
         is_auth, is_none = request.user.is_authenticated(), 0
         if is_auth: return nodes
@@ -108,7 +108,7 @@ class NavExtender(Modifier):
     """Extends menu item with another menu"""
     modify_rule = ('once',)
 
-    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}):
+    def modify(self, request, nodes, namespace, root_id, post_cut, meta={}, **kwargs):
         exts, resort = [], False
         # rearrange the parent relations
         for node in nodes:

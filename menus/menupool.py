@@ -1,9 +1,12 @@
+import copy
+import re
+import urlparse
 from django.contrib.sites.models import Site
 from django.core.cache import cache
 from django.utils.translation import get_language
 from .utils import meta_to_request
 from . import settings as msettings
-import copy, urlparse, re
+
 
 class MenuPool(object):
 
@@ -85,8 +88,8 @@ class MenuPool(object):
         cache.delete_many(to_be_deleted)
         self._cache_keys.difference_update(to_be_deleted)
 
-    def get_nodes(self, menuconf, request, namespace=None,
-                                  root_id=None, init_only=False):
+    def get_nodes(self, menuconf, request,
+                  namespace=None, root_id=None, init_only=False, **kwargs):
         """generate menu nodes list by menu confname and some filters"""
 
         # get menu configuration data (dict value expected as valid)
@@ -132,10 +135,10 @@ class MenuPool(object):
         if root_id:
             nodes, meta = self._nodes_in_node(nodes, root_id), {'modified_ancestors': True,}
         return self.apply_modifiers(menuconf, nodes, request, namespace=namespace,
-                                               root_id=root_id, post_cut=False, meta=meta)
+                                    root_id=root_id, post_cut=False, meta=meta, kwargs=kwargs)
 
     def apply_modifiers(self, menuconf, nodes, request, namespace=None, root_id=None,
-                               post_cut=False, meta=None, modify_rule='every_time'):
+                               post_cut=False, meta=None, modify_rule='every_time', kwargs=None):
         """process nodes with modifiers, related to menu confname"""
 
         # get menu configuration data (dict value expected as valid)
@@ -150,10 +153,10 @@ class MenuPool(object):
             self._modifiers[menuconf['NAME']] = modifiers
 
         # process
-        meta, meta['modify_rule'] = meta or {}, modify_rule
+        meta, meta['modify_rule'], kwargs = meta or {}, modify_rule, kwargs or {}
         for mod in modifiers:
             if not modify_rule in mod.modify_rule: continue
-            nodes = mod.modify(request, nodes, namespace, root_id, post_cut, meta)
+            nodes = mod.modify(request, nodes, namespace, root_id, post_cut, meta, **kwargs)
         return nodes
 
     def get_nodes_by_attribute(self, nodes, name, value):
@@ -161,6 +164,95 @@ class MenuPool(object):
         for node in nodes:
             node.attr.get(name, None) == value and found.append(node)
         return found
+
+    # nodes filteting by level
+    def cut_levels(self, nodes, from_level, to_level, extra_inactive, extra_active,
+                   show_invisible=False, show_inactive_branch=False):
+        """cutting nodes by levels away from menus, also check visibility, ect"""
+
+        # default values
+        final, removed, selected, in_branch = [], {}, None, False
+        # check: show only active branch (see below)
+        only_active_branch = not show_inactive_branch and nodes[0].level < from_level
+
+        # main loop
+        for node in nodes:
+            # ignore nodes, which already is removed
+            if node.id in removed: continue
+            # remove and ignore nodes that don't have level information
+            if not hasattr(node, 'level'):
+                self.remove(node, removed)
+                continue
+
+            # save selected node
+            if node.selected:
+                selected = node
+
+            # check only active branch if some conditions
+            if only_active_branch:
+                # check node is in selected branch: directry by sel-sib-des attrs
+                #                                            or via parent.ancestor
+                if not in_branch and node.level == from_level:
+                    in_branch = node.descendant or node.parent.ancestor \
+                                                or node.sibling or node.selected
+                # node is out of the selected branch, out of from_level > break
+                elif in_branch and node.level < from_level:
+                    break
+                # just ignore left side relative to selected branch
+                if not in_branch:
+                    continue
+            # ignore nodes higher then from level
+            elif node.level < from_level:
+                continue
+
+            # remove nodes that are too deep or invisible (show_visible mode is off)
+            if (node.level > to_level) or (not show_invisible and not node.visible):
+                self.remove(node, removed)
+                continue
+
+            # cut inactive nodes to extra_inactive (nodes in not active branch)
+            if not (node.selected or node.ancestor or node.descendant) and node.children:
+                self.cut_after(node, extra_inactive, removed)
+            # turn nodes that are on from_level into root nodes
+            if node.level == from_level:
+                final.append(node)
+                node.parent = None
+
+        # remove marked-for-remove zero-level nodes
+        if removed:
+            ftemp, final = final, []
+            for node in ftemp:
+                if node.id in removed: continue
+                final.append(node)
+
+        # cut active nodes to extra_active (nodes in active branch)
+        if selected and selected.children:
+            self.cut_after(selected, extra_active, removed)
+        elif not selected:
+            for node in final:
+                node.descendant and self.cut_after(node, extra_active, removed)
+
+        return final, selected
+
+    def cut_after(self, node, levels, removed):
+        """given a tree of nodes cuts after N levels"""
+        if not node.children:
+            return
+        elif levels <= node.level: # relative to current node
+            for n in node.children:
+                removed.__setitem__(n.id, None)
+                n.children and self.cut_after(n, 0, removed)
+            node.children = []
+        else:
+            for n in node.children:
+                n.children and self.cut_after(n, levels-1, removed)
+
+    def remove(self, node, removed):
+        """remove node"""
+        removed.__setitem__(node.id, None)
+        if node.parent and node in node.parent.children:
+            node.parent.children.remove(node)
+        node.children and self.cut_after(node, 0, removed)
 
     # raw menus nodes list generator
     def _build_nodes(self, request, menus):
@@ -209,7 +301,7 @@ class MenuPool(object):
                     else:
                         ignored_nodes[node.namespace].append(node.id)
                         continue
-                # append node and it is to main list
+                # append node and it id to main list
                 final_nodes['nodes'].append(node)
                 final_nodes['ids'][node.namespace].append(node.id)
                 # last node for search in ancestors
