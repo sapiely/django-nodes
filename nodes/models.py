@@ -112,8 +112,11 @@ class Node(models.Model):
         is_create = self.pk is None
         # check slug modification
         if not (is_moved or is_create):
-            original = self.__class__.objects.get(pk=self.pk)
-            is_moved = (self.slug != original.slug) or (self.parent_id != original.parent_id)
+            origslug = self._meta.model.objects.filter(pk=self.pk) \
+                                               .values_list('slug')[0][0]
+            origpath = self.parent.get_path().strip('/') if self.parent else ''
+            is_moved = (self.slug != origslug) or (self.path != origpath)
+
         # get path value
         if is_moved or is_create:
             self.path = self.parent.get_path().strip('/') if self.parent else ''
@@ -154,6 +157,7 @@ class Node(models.Model):
 
     def get_menu_title(self):
         return self.menu_title or self.name
+
 
 class Item(models.Model):
     """A simple node's item model"""
