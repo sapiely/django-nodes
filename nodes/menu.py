@@ -1,5 +1,6 @@
-from django.contrib.sites.models import Site
+from django.contrib.sites.shortcuts import get_current_site
 from menus.base import Menu, NavigationNode
+
 
 class NodeMenu(Menu):
     model_class = None
@@ -15,15 +16,19 @@ class NodeMenu(Menu):
         }
 
         if node.menu_extender:
-            attr['navigation_extenders'] = [i.strip() for i in node.menu_extender.split(',') \
-                                                      if i.strip()]
+            attr['navigation_extenders'] = [
+                i.strip() for i in node.menu_extender.split(',') if i.strip()
+            ]
         return attr
+
+    def get_queryset(self, request):
+        return self.model_class.objects.filter(
+            site=get_current_site(request)).order_by("tree_id", "lft")
 
     def get_nodes(self, request):
         if not self.model_class:
             raise Exception, 'model_class variable not defined in NodeMenu'
-        site = Site.objects.get_current()
-        pages = self.model_class.objects.filter(site=site).order_by("tree_id", "lft")
+        pages = self.get_queryset(request)
         nodes, home, cut_branch, cut_level = [], None, False, None
         for page in pages:
             # remove inactive nodes

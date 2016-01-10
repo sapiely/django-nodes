@@ -1,3 +1,4 @@
+from importlib import import_module
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
@@ -14,7 +15,6 @@ def meta_to_request(request):
 
 def import_path(import_path, alternate=None):
     """import module by import_path"""
-    from django.utils.importlib import import_module
     try:
         module_name, value_name = import_path.rsplit('.', 1)
         module = import_module(module_name)

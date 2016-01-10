@@ -1,13 +1,15 @@
+import re
 from django import template
-from django.db import models
+from django.apps import apps
 from menus.template import inclusion_tag
 from nodes.models import Node, Item
-import re
+
 
 NAME_PATTERN = 'nodes/tags/%s.%s.html'
 EMPTY_TEMPLATE = 'menus/empty.html'
 FREGEX = re.compile(r"""([a-z0-9_]+) \s*=\s* ("|')? (?(2) (?:(.+?)(?<!\\)\2) | ([^\s'"]+))""", \
                     re.I | re.X)
+
 
 def show_node(context, model=None, node_id=None, template=None,
                         slices=None, filter=None, order_by=None):
@@ -94,9 +96,10 @@ def slices_parser(slices):
 
 def nodes_model(name, parent):
     """Get model by name and ancestor"""
-    for i in models.get_models():
+    for i in apps.get_models():
         if i.__name__ == name and issubclass(i, parent):
             return i
+
 
 register = template.Library()
 inclusion_tag(register, takes_context=True)(show_node)

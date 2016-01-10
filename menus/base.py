@@ -3,6 +3,7 @@ from .utils import import_path, check_menus_settings
 from .menupool import MenuPool
 from . import settings as msettings
 
+
 # registry
 class Registry(object):
     def __init__(self):
@@ -63,12 +64,14 @@ class Registry(object):
     def clear_modifiers(self):
         self.modifiers = {}
 
+
 # exceptions
 class NamespaceAllreadyRegistered(Exception):
     pass
 
 class ModifierAllreadyRegistered(Exception):
     pass
+
 
 # menus classes
 class Menu(object):
@@ -82,6 +85,7 @@ class Menu(object):
     def get_nodes(self, request):
         """should return a list of NavigationNode instances"""
         raise NotImplementedError
+
 
 class Modifier(object):
     """blank modifier class"""
@@ -114,6 +118,7 @@ class Modifier(object):
                 nodes.append(node)
                 set_children(node, nodes)
         return nodes
+
 
 class NavigationNode(object):
     """navigation node class"""
