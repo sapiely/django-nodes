@@ -1,5 +1,5 @@
 from .base import Registry
 
-VERSION = (0, 1, 56)
+VERSION = (1, 8, 58)
 
 registry = Registry()

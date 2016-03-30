@@ -13,9 +13,10 @@ def get_from_context(context, variable='request'):
 def inclusion_tag(register, takes_context=False, name=None):
     """
     inclusion_tag decorator: works like original,
-    but takes "file_name" variable from result of function call
-    requires register object as first param
+    but takes "template" variable from result of function call,
+    requires template register object as first param
     note: all code ripped from django except "fix:" strings
+    todo: register modified InclusionNode by regular register.tag call
     """
     def dec(func):
         params, varargs, varkw, defaults = getargspec(func)
@@ -33,6 +34,8 @@ def inclusion_tag(register, takes_context=False, name=None):
 
                 # fix: get template name from func result
                 file_name = _dict.get('template', None)
+                if not file_name:
+                    return u''
 
                 t = context.render_context.get(self)
                 if t is None:

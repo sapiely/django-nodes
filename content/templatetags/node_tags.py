@@ -6,36 +6,47 @@ from nodes.models import Node, Item
 
 
 NAME_PATTERN = 'nodes/tags/%s.%s.html'
-EMPTY_TEMPLATE = 'menus/empty.html'
-FREGEX = re.compile(r"""([a-z0-9_]+) \s*=\s* ("|')? (?(2) (?:(.+?)(?<!\\)\2) | ([^\s'"]+))""", \
+FREGEX = re.compile(r"""([a-z0-9_]+) \s*=\s* ("|')? (?(2) (?:(.+?)(?<!\\)\2) | ([^\s'"]+))""",
                     re.I | re.X)
 
 
 def show_node(context, model=None, node_id=None, template=None,
-                        slices=None, filter=None, order_by=None):
+              slices=None, filter=None, order_by=None, varname=None):
     """
     Shows the requested node and filtered children
     - model:    name of node model (example - NodeMain)
     - node_id:  id or slug of requested node
     - template: alternative template name, converts to
                 "nodes/tags/node.{template or node_slug}.html"
-    - slices:   slice object for items queryset (like real slice - "{from}:{to}:{step}")
-    - filter:   params for filtering items (example - "attr=value attr2='v 2'"),
+                if value is False, do not render any template
+    - slices:   slice object for items queryset
+                (like real slice - "{from}:{to}:{step}")
+    - filter:   params for filtering items (example: "attr=value attr2='v 2'"),
                 default {'active': True,}
-                Note that None, True, False and digist with no quotes will be converted
-                to real python types, so "aa=None bb='None' cc=123 dd='123'" ->
-                                         {'aa': None, 'bb':'None', 'cc':123, 'dd':'123'}
-    - order_by: ordering params (like original - "sort -id"), default "-date_start -sort"
+                Note that None, True, False and digist with no quotes
+                will be converted to real python types,
+                so
+                    "aa=None bb='None' cc=123 dd='123'"
+                converts to
+                    {'aa': None, 'bb':'None', 'cc':123, 'dd':'123'}
+    - order_by: ordering params (like original - "sort -id"),
+                default "-date_start -sort"
+    - varname:  alternative (to default name "object") name of context
+                variable name
+
+    If template is empty, tag will work like {% ... as varname %}
+    (varname default is "object"), sometimes it is more usable,
+    than render any templates.
     """
     request, model = context.get('request', None), nodes_model(model, Node)
     if not request or not model or not node_id:
-        return {'template': EMPTY_TEMPLATE,}
+        return {'template': None,}
 
     idfilter = {'pk' if isinstance(node_id, int) else 'slug': node_id,}
     try:
         node = model.objects.get(**idfilter)
     except model.DoesNotExist:
-        return {'template': EMPTY_TEMPLATE,}
+        return {'template': None,}
 
     slices = slices_parser(slices)
     filter = filter_parser(filter, node.item_set.model) or {'active': True,}
@@ -43,30 +54,41 @@ def show_node(context, model=None, node_id=None, template=None,
     node.item_list = node.item_set.select_related('node').filter(**filter) \
                                   .order_by(*order_by)[slice(*slices)]
 
-    template = NAME_PATTERN % ('node', template or node.slug)
-    context.update({'template': template, 'object': node,})
+    template = (NAME_PATTERN % ('node', template or node.slug)
+                if template else None)
+    varname = varname or 'object'
+    context.update({'template': template, varname: node,})
     return context
 
-def show_item(context, model=None, item_id=None, template=None):
+def show_item(context, model=None, item_id=None, template=None, varname=None):
     """
     Shows the requested item
     - model:    name of item model (example - ItemMain)
     - item_id:  id or slug of requested item
     - template: alternative template name, converts to
-                "nodes/tags/item.{template or item_slug}.html"
+                "nodes/tags/item.{template or item_slug}.html",
+                if value is False, do not render any template
+    - varname:  alternative (to default name "object") name of
+                context variable name
+
+    If template is empty, tag will work like {% ... as varname %}
+    (varname default is "object"), sometimes it is more usable,
+    than render any templates.
     """
     request, model = context.get('request', None), nodes_model(model, Item)
     if not request or not model or not item_id:
-        return {'template': EMPTY_TEMPLATE,}
+        return {'template': False,}
 
     idfilter = {'pk' if isinstance(item_id, int) else 'slug': item_id,}
     try:
         item = model.objects.get(**idfilter)
     except model.DoesNotExist:
-        return {'template': EMPTY_TEMPLATE,}
+        return {'template': False,}
 
-    template = NAME_PATTERN % ('item', template or item.slug)
-    context.update({'template': template, 'object': item,})
+    template = (NAME_PATTERN % ('item', template or item.slug)
+                if template else None)
+    varname = varname or 'object'
+    context.update({'template': template, varname: item,})
     return context
 
 def filter_parser(filter, model):
@@ -96,11 +118,10 @@ def slices_parser(slices):
 
 def nodes_model(name, parent):
     """Get model by name and ancestor"""
-    for i in apps.get_models():
+    for i in models.get_models():
         if i.__name__ == name and issubclass(i, parent):
             return i
 
-
 register = template.Library()
-inclusion_tag(register, takes_context=True)(show_node)
-inclusion_tag(register, takes_context=True)(show_item)
+inclusion_tag_ex(register, takes_context=True)(show_node)
+inclusion_tag_ex(register, takes_context=True)(show_item)
