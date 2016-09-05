@@ -1,7 +1,7 @@
 import copy
 import re
 import urlparse
-from django.contrib.sites.models import Site
+from django.contrib.sites.shortcuts import get_current_site
 from django.core.cache import cache
 from django.utils.translation import get_language
 from .utils import meta_to_request
@@ -65,7 +65,7 @@ class MenuPool(object):
             return key.split('_', 3)[1:4]
 
         lang = lang or get_language()
-        site_id = site_id or Site.objects.get_current().pk
+        site_id = site_id or get_current_site(None).pk
         return 'menus_%s_%s_%s_cache' % (menuconf, lang, site_id)
 
     def cache_clear(self, menuconf=None, site_id=None, language=None):
