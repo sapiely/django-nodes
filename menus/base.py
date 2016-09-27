@@ -1,7 +1,20 @@
-from django.utils.encoding import smart_str
-from .utils import import_path, check_menus_settings
-from .menupool import MenuPool
+from .utils import import_path
 from . import settings as msettings
+
+
+ONCE = 1
+PER_REQUEST = 2
+POST_SELECT = 4
+DEFAULT = 8
+
+
+# exceptions
+class NamespaceAllreadyRegistered(Exception):
+    pass
+
+
+class ModifierAllreadyRegistered(Exception):
+    pass
 
 
 # registry
@@ -15,14 +28,14 @@ class Registry(object):
     @property
     def menupool(self):
         if not self._menupool:
-            menupool = msettings.MENU_POOL and import_path(msettings.MENU_POOL) \
-                                            or MenuPool
+            menupool = import_path(
+                msettings.MENU_POOL or msettings.DEFAULT_MENU_POOL)
             self._menupool = menupool(self)
             self.autodiscover() # also autodiscover once
 
-            # check settings correctness
+            # prepare and check settings correctness
             try:
-                check_menus_settings()
+                self._menupool.prepare_menus_settings()
             except:
                 self._menupool = None
                 raise
@@ -30,7 +43,8 @@ class Registry(object):
         return self._menupool
 
     def autodiscover(self):
-        if self.discovered: return
+        if self.discovered:
+            return
         for app in msettings.MENU_APPS:
             __import__(app, {}, {}, ['menu'])
         self.discovered = True
@@ -45,15 +59,17 @@ class Registry(object):
         assert issubclass(menu, Menu)
         menu = menu()
         if menu.namespace in self.menus:
-            raise NamespaceAllreadyRegistered, 'Menu with name "%s" is already ' \
-                                               'registered' % menu.namespace
+            raise (NamespaceAllreadyRegistered,
+                   'Menu with name "%s" is already registered'
+                   % menu.namespace)
         self.menus[menu.namespace] = menu
 
     def register_modifier(self, modifier):
         assert issubclass(modifier, Modifier)
         if modifier.__name__ in self.modifiers:
-            raise ModifierAllreadyRegistered, 'Modifier with name "%s" is already ' \
-                                              'registered' % menu.__name__
+            raise (ModifierAllreadyRegistered,
+                   'Modifier with name "%s" is already registered'
+                   % modifier.__name__)
         self.modifiers[modifier.__name__] = modifier()
 
     def unregister_modifier(self, modifier):
@@ -65,22 +81,19 @@ class Registry(object):
         self.modifiers = {}
 
 
-# exceptions
-class NamespaceAllreadyRegistered(Exception):
-    pass
-
-class ModifierAllreadyRegistered(Exception):
-    pass
-
-
 # menus classes
 class Menu(object):
     """blank menu class"""
-    namespace, index = None, 500
+    namespace = None
+    weight = 500
 
     def __init__(self):
         if not self.namespace:
             self.namespace = self.__class__.__name__
+
+    def get_navigation_node_class(self):
+        return import_path(msettings.NAVIGATION_NODE
+                           or msettings.DEFAULT_NAVIGATION_NODE)
 
     def get_nodes(self, request):
         """should return a list of NavigationNode instances"""
@@ -89,81 +102,90 @@ class Menu(object):
 
 class Modifier(object):
     """blank modifier class"""
-    modify_rule = 'every_time' # once, every_time, per_request
+    modify_event = None # ONCE, PER_REQUEST, POST_SELECT, DEFAULT
 
-    def modify(self, request, nodes, namespace, id, post_cut, meta, **kwargs):
+    def modify(self, request, data, meta, **kwargs):
+        """
+        This method takes nodes data dict (
+            {"nodes": nodes, "selected": selected,}
+        ) and should update "nodes" value, if required.
+        Nodes should be always returned in linear format.
+        """
         raise NotImplementedError
 
-    def remove_children(self, node, nodes):
+    def get_descendants_length(self, node, length=0):
+        if node.children:
+            for child in node.children:
+                length += 1 + self.get_descendants_length(child)
+        return length
+
+    def get_descendants(self, node, nodes=None):
+        nodes = nodes or []
         for n in node.children:
-            nodes.remove(n)
-            self.remove_children(n, nodes)
-        node.children = []
-
-    def remove_branch(self, node, nodes):
-        if node.parent:
-            node.parent.children.remove(node)
-        nodes.remove(node)
-        self.remove_children(node, nodes)
-
-    def resort_nodes(self, data):
-        nodes = []
-        def set_children(node, nodes):
-            if not node.children: return
-            for n in node.children:
-                nodes.append(n)
-                set_children(n, nodes)
-        for node in data:
-            if not node.parent:
-                nodes.append(node)
-                set_children(node, nodes)
+            nodes.append(n)
+            if n.children:
+                nodes = self.get_descendants(n, nodes=nodes)
         return nodes
+
+    def format_nodes(self, nodes, linear=True):
+        # get hierarchical nodes
+        nodes = [node for node in nodes if not node.parent]
+
+        # hierarchical (not linear)
+        if not linear:
+            return nodes
+
+        # linear
+        final = []
+        for node in nodes:
+            final += [node] + self.get_descendants(node)
+        return final
 
 
 class NavigationNode(object):
-    """navigation node class"""
+    """Navigation node class"""
 
-    title               = None
-    url                 = None
-    id                  = None
-    parent_id           = None
+    title = None
+    url = None
+    namespace = None
+    data = None
 
-    visible             = True
-    visible_chain       = True
+    id = None
+    parent = None
+    children = None
 
-    parent              = None # do not touch
-    namespace           = None
-    attr                = None
+    visible = True
+    selected = False
+    active = True
+    modified = False
 
-    meta_title          = None
-    meta_keywords       = None
-    meta_description    = None
+    def __init__(self, title, url, id, parent=None, visible=True,
+                 data=None, **kwargs):
+        self.title = title
+        self.url = self.url_original = url
+        self.data = data or {}
 
-    def __init__(self, title, url, id, parent_id=None,
-                  visible=True, visible_chain=True, attr=None,
-                   meta_title='', meta_keywords='', meta_description=''):
-        self.title              = title
-        self.url                = url
-        self.url_original       = url
+        self.id = id
+        self.parent = parent
+        self.children = []
 
-        self.id                 = id
-        self.parent_id          = parent_id
-        self.children           = [] # do not touch
-        self.attr               = attr or {}
-
-        self.visible            = visible
-        self.visible_chain      = visible_chain
-
-        self.meta_title         = meta_title
-        self.meta_keywords      = meta_keywords
-        self.meta_description   = meta_description
+        self.visible = visible
 
     def __repr__(self):
-        return "<Navigation Node: %s>" % smart_str(self.title)
+        return u'<Navigation Node: %s>' % self.title
 
     def get_descendants(self):
         nodes = []
         for node in self.children:
-            nodes.append(node)
-            nodes += node.get_descendants()
+            nodes += [node] + node.get_descendants()
         return nodes
+
+
+class MetaData(object):
+    selected = None
+    chain = None
+    title = None
+
+    def __init__(self):
+        self.chain = []
+        self.title = []
