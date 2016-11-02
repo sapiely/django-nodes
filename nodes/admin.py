@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.db import models
 from django import forms
 
+
 class NodeAdmin(admin.ModelAdmin):
     list_display = ('name', 'id', 'slug', 'level',)
     list_display_links = ('id',)
@@ -38,12 +39,14 @@ class NodeAdmin(admin.ModelAdmin):
     )
 
     def formfield_for_dbfield(self, db_field, **kwargs):
-        formfield = super(NodeAdmin, self).formfield_for_dbfield(db_field, **kwargs)
-        # change widget for wideinput_fields directly (not formfield_overrides)
+        field = super(NodeAdmin, self).formfield_for_dbfield(db_field, **kwargs)
+        # set size=100 for each wideinput_fields and remove vTextField class
         if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
-            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length,
-                                                      'size': 100,})
-        return formfield
+            attrs = field.widget.attrs
+            attrs.update(size=100)
+            if 'vTextField' in attrs.get('class', ''):
+                attrs['class'] = attrs['class'].replace('vTextField', '').strip()
+        return field
 
     def get_form(self, request, obj=None, **kwargs):
         form = super(NodeAdmin, self).get_form(request, obj=None, **kwargs)
@@ -51,6 +54,7 @@ class NodeAdmin(admin.ModelAdmin):
         form.base_fields['parent'].label_from_instance = lambda obj: u'%s %s' % \
                                                                      ('. ' * obj.level, obj)
         return form
+
 
 class ItemAdmin(admin.ModelAdmin):
     list_display = ('name', 'id', 'slug', 'sort',)
@@ -82,12 +86,14 @@ class ItemAdmin(admin.ModelAdmin):
         )
 
     def formfield_for_dbfield(self, db_field, **kwargs):
-        formfield = super(ItemAdmin, self).formfield_for_dbfield(db_field, **kwargs)
-        # change widget for wideinput_fields directly (not formfield_overrides)
+        field = super(ItemAdmin, self).formfield_for_dbfield(db_field, **kwargs)
+        # set size=100 for each wideinput_fields and remove vTextField class
         if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
-            formfield.widget = forms.TextInput(attrs={'maxlength': db_field.max_length,
-                                                      'size': 100,})
-        return formfield
+            attrs = field.widget.attrs
+            attrs.update(size=100)
+            if 'vTextField' in attrs.get('class', ''):
+                attrs['class'] = attrs['class'].replace('vTextField', '').strip()
+        return field
 
     def get_form(self, request, obj=None, **kwargs):
         form = super(ItemAdmin, self).get_form(request, obj=None, **kwargs)
