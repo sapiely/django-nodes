@@ -1,4 +1,5 @@
 from django import template
+from django.utils.safestring import mark_safe
 from menus.template import inclusion_tag, get_from_context
 
 def show_meta_title(context, main_title='', template="metas/title.html"):
@@ -31,8 +32,10 @@ def show_meta_current(context, pattern="<h1>%s</h1>"):
     request = get_from_context(context, 'request')
     current = request.meta.current
     pattern = pattern if '%s' in pattern else '%s'
-    return pattern % current.attr.get('title', current.title) \
-                     if current and current.attr.get('show_meta_current', True) else ''
+    pattern = (pattern % current.attr.get('title', current.title)
+               if current and current.attr.get('show_meta_current', True) else
+               '')
+    return mark_safe(pattern)
 
 def show_meta_keywords(context, main_keywords='', with_tag=False, as_default=True):
     """shows the meta keywords tag"""
@@ -42,7 +45,7 @@ def show_meta_keywords(context, main_keywords='', with_tag=False, as_default=Tru
                     if as_default else keywords + request.meta.keywords)
     keywords    = u''.join([(u' %s' % i if i else u'') for i in keywords]).strip()
     keywords    = u'<meta name="keywords" content="%s" />' % keywords if keywords and with_tag else keywords
-    return keywords
+    return mark_safe(keywords)
 
 def show_meta_description(context, main_description='', with_tag=False, as_default=True):
     """shows the meta description tag"""
@@ -52,7 +55,7 @@ def show_meta_description(context, main_description='', with_tag=False, as_defau
                         if as_default else description + request.meta.description)
     description     = u''.join([(u' %s' % i if i else u'') for i in description]).strip()
     description     = u'<meta name="description" content="%s" />' % description if description and with_tag else description
-    return description
+    return mark_safe(description)
 
 register = template.Library()
 register.simple_tag(takes_context=True)(show_meta_current)

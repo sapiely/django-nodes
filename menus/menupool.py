@@ -128,7 +128,8 @@ class MenuPool(object):
 
             request.meta._menus[menuconf['NAME']] = nodes
 
-        if init_only: return
+        if init_only:
+            return
 
         # clone nodes and process with root_id and every-time apply_modifiers
         nodes, meta = copy.deepcopy(nodes), None
@@ -340,31 +341,26 @@ class MenuPool(object):
     def check_node_url_with_domain(self, domain, node):
         return False
 
-    def compare_path(self, path, clean, node, ppath, pclean, pnode):
-        return len(path) < len(ppath) or (len(path) == len(ppath) and clean >= pclean)
+    def compare_path(self, node, pnode):
+        return (node.attr.get('weight_selected', 500) >=
+                pnode.attr.get('weight_selected', 500))
 
     def _get_path(self, node):
         p = urlparse.urlparse(node.url_original)
         if p.netloc and not self.check_node_url_with_domain(p.netloc, node):
-            return None, False
-        return p.path.strip('/').split('/'), not bool(p.params or p.query or p.fragment)
+            return None
+        return p.path.strip('/')
 
     def _build_paths(self, nodes):
         data = {}
         for node in nodes:
-            path, clean = self._get_path(node)
+            path = self._get_path(node)
             # ignore nodes with denied domain name
-            if not path: continue
-
-            for item in ['/'.join(path[:i]) for i in range(1, len(path)+1)]:
-                if data.has_key(item):
-                    # check this node is better match than previous
-                    ppath, pclean = self._get_path(data[item])
-                    if self.compare_path(path, clean, node, ppath, pclean, data[item]):
-                        data[item] = node
-                else:
-                    # link path with node
-                    data[item] = node
+            if not path:
+                continue
+            # check node is new or it is better match than previous
+            if not path in data or self.compare_path(node, data[path]):
+                data[path] = node
         return data
 
     def _mark_selected(self, request, paths, nodes):
