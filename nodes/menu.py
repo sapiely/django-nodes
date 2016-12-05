@@ -35,12 +35,15 @@ class NodeMenu(Menu):
             if cut_branch:
                 if cut_level < page.level: continue
                 cut_branch = False
-            if not page.active:
+            if not self.node_is_active(page):
                 cut_branch = True
                 cut_level = page.level
                 continue
             nodes.append(self.node_to_navinode(page))
         return nodes
+
+    def node_is_active(self, node):
+        return node.active
 
     def node_to_navinode(self, node):
         n = self.navigation_node_class(

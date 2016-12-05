@@ -66,6 +66,9 @@ class NodeView(TemplateView):
     def get_item_queryset(self, model, target):
         return model.objects.select_related('node')
 
+    def get_node_queryset(self, model, filter):
+        return model.objects.filter(filter)
+
     def get_node(self, model):
         """get curent node"""
         path    = self.kwargs['path'].strip('/').split('/')
@@ -75,7 +78,8 @@ class NodeView(TemplateView):
         filter &= Q(active=True)
 
         # get node or 404
-        node = get_object_or_404(model.objects.filter(filter))
+        node = self.get_node_queryset(model, filter)[:1]
+        node = get_object_or_404(node)
 
         # if link is defined, access by path + slug is deined
         if node.link and node.link != '/'.join(path):
