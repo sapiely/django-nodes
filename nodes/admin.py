@@ -43,7 +43,7 @@ class NodeAdmin(admin.ModelAdmin):
         # set size=100 for each wideinput_fields and remove vTextField class
         if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
             attrs = field.widget.attrs
-            attrs.update(size=100)
+            attrs.update(size=95)
             if 'vTextField' in attrs.get('class', ''):
                 attrs['class'] = attrs['class'].replace('vTextField', '').strip()
         return field
@@ -67,21 +67,21 @@ class ItemAdmin(admin.ModelAdmin):
                         'template', 'view',)
     fieldsets = (
             (None, {
-                'fields': ('active', 'date_start', 'date_end', 'name', 'sort',
-                           'descr', 'text',)
+                'fields': (('date_start', 'date_end',), 'name',
+                           ('sort', 'active',), 'descr', 'text',),
             }),
             (_('path and node settings'), {
                 'classes': ('collapse',),
-                'fields': ('slug', 'link', 'node',)
+                'fields': ('slug', 'link', 'node',),
             }),
             (_('meta settings'), {
                 'classes': ('collapse',),
-                'fields': ('meta_title', 'meta_keywords', 'meta_description',)
+                'fields': ('meta_title', 'meta_keywords', 'meta_description',),
             }),
             (_('behaviour settings'), {
                 'classes': ('collapse',),
                 'fields': ('template', 'view', 'visible', 'show_item_name',
-                           'show_node_link', 'show_in_meta',)
+                           'show_node_link', 'show_in_meta',),
             }),
         )
 
@@ -90,7 +90,7 @@ class ItemAdmin(admin.ModelAdmin):
         # set size=100 for each wideinput_fields and remove vTextField class
         if hasattr(self, 'wideinput_fields') and db_field.name in self.wideinput_fields:
             attrs = field.widget.attrs
-            attrs.update(size=100)
+            attrs.update(size=95)
             if 'vTextField' in attrs.get('class', ''):
                 attrs['class'] = attrs['class'].replace('vTextField', '').strip()
         return field
