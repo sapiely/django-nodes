@@ -1,5 +1,5 @@
 from django import template
-from menus.utils.template import inclusion_tag, get_from_context
+from nodes.utils.template import inclusion_tag, get_from_context
 
 def show_meta_title(context, main_title='', template="metas/title.html"):
     """render a meta title list into requested template"""

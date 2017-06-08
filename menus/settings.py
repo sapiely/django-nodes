@@ -38,9 +38,9 @@ DEFAULT_SCHEME = {
     ],
     'CACHE_TIMEOUT': 600,
 }
-DEFAULT_METADATA = 'menus.base.MetaData'
-DEFAULT_MENU_POOL = 'menus.menupool.MenuPool'
-DEFAULT_NAVIGATION_NODE = 'menus.base.NavigationNode'
+DEFAULT_METADATA = 'nodes.base.MetaData'
+DEFAULT_MENU_POOL = 'nodes.menupool.MenuPool'
+DEFAULT_NAVIGATION_NODE = 'nodes.base.NavigationNode'
 
 MENU_APPS           = getattr(settings, 'MENUS_APPS', None)
 BUILTIN_MODIFIERS   = getattr(settings, 'MENUS_BUILTIN_MODIFIERS', True)
