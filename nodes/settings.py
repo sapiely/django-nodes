@@ -5,18 +5,19 @@ from django.conf import settings
 MENUS_APPS = ['content',]
 MENUS_BUILTIN_MODIFIERS = True
 
-MENUS_MENUPOOL = 'application.menu.MenuPool'
+DEFAULT_PROCESSOR = 'application.menu.Processor'
 MENUS_NODE = 'application.menu.NavigationNode'
 MENUS_METADATA = 'application.menu.MetaData'
 
-MENUS_ROUTES = (
-    ('^(/some/url/|/another/)', 'simple',),
-)
+#MENUS_ROUTES = (
+#    ('^(/some/url/|/another/)', 'simple',),
+#)
 MENUS = {
     'default': {
         'MENUS': ['NodeMainMenu', 'TestSideMenu',],
         'MODIFIERS': {
-            'default': ['NavigationExtender', 'LoginRequired', 'Jump', 'Namespace', 'Level',],
+            'default': ['NavigationExtender', 'AuthVisibility',
+                        'Jump', 'Namespace', 'Level',],
             'minimal': ['Jump', 'Level',],
             'filters': ['Jump', 'Filter', 'CutLevels', 'Level',],
         }
@@ -26,35 +27,38 @@ MENUS = {
         'MENUS': ['TestSideMenu',],
         'MODIFIERS': None, # [] for empty modifiers
         'CACHE_TIMEOUT': 600,
+        'ROUTE': '^(/some/url/|/another/)',
     },
 }
 """
 
 DEFAULT_SCHEME = {
     'MODIFIERS': [
-        'NavigationExtender', 'LoginRequired', 'Jump',
+        'NavigationExtender', 'AuthVisibility', 'Jump',
         'Root', 'Namespace', 'Level', 'MetaDataProcessor',
-        'PositionalFlagsMarker', 'CutLevels', # 'Filter',
+        'PositionalMarker', 'CutLevels', # 'Filter',
     ],
     'CACHE_TIMEOUT': 600,
 }
-DEFAULT_METADATA = 'nodes.base.MetaData'
-DEFAULT_MENU_POOL = 'nodes.menupool.MenuPool'
+DEFAULT_META_DATA = 'nodes.base.MetaData'
+DEFAULT_PROCESSOR = 'nodes.processor.Processor'
 DEFAULT_NAVIGATION_NODE = 'nodes.base.NavigationNode'
 
 MENU_APPS           = getattr(settings, 'MENUS_APPS', None)
 BUILTIN_MODIFIERS   = getattr(settings, 'MENUS_BUILTIN_MODIFIERS', True)
-MENU_POOL           = getattr(settings, 'MENUS_MENUPOOL', None)
-META_DATA           = getattr(settings, 'MENUS_METADATA', None)
-NAVIGATION_NODE     = getattr(settings, 'MENUS_NAVIGATION_NODE', None)
-MENU_CONF           = getattr(settings, 'MENUS', None)
-MENU_ROUTES         = getattr(settings, 'MENUS_ROUTES', None) or []
+PROCESSOR           = getattr(settings, 'MENUS_PROCESSOR', DEFAULT_PROCESSOR)
+META_DATA           = getattr(settings, 'MENUS_META_DATA', DEFAULT_META_DATA)
+NAVIGATION_NODE     = getattr(settings, 'MENUS_NAVIGATION_NODE',
+                              DEFAULT_NAVIGATION_NODE)
+MENUS               = getattr(settings, 'MENUS', None)
+
+
 
 """
 # menus sample settings
 MENUS_APPS = ['content',]
 MENUS_BUILTIN_MODIFIERS = True
-MENUS_MENUPOOL = 'application.menu.MenuPool'
+DEFAULT_PROCESSOR = 'application.menu.Processor'
 MENUS_ROUTES = (
     ('^(/some/url/|/another/)', 'simple',),
 )
@@ -81,7 +85,6 @@ DEFAULT_SCHEME = {
 
 MENU_APPS           = getattr(settings, 'MENUS_APPS', None)
 BUILTIN_MODIFIERS   = getattr(settings, 'MENUS_BUILTIN_MODIFIERS', True)
-MENU_POOL           = getattr(settings, 'MENUS_MENUPOOL', None)
-MENU_CONF           = getattr(settings, 'MENUS', None)
-MENU_ROUTES         = getattr(settings, 'MENUS_ROUTES', None) or []
+PROCESSOR           = getattr(settings, 'DEFAULT_PROCESSOR', None)
+MENUS               = getattr(settings, 'MENUS', None)
 """

@@ -6,7 +6,7 @@ from nodes import registry
 def show_menu(context, from_level=0, to_level=100,
               extra_inactive=0, extra_active=100,
               template=None, show_invisible=False, show_inactive_branch=False,
-              menuconf=None, modifiers=None, **kwargs):
+              menuconf=None, modifiers=None, extra_active_mode=0, **kwargs):
     """
     render a nested list of all children of the pages
     - from_level: starting level
@@ -32,14 +32,15 @@ def show_menu(context, from_level=0, to_level=100,
         'to_level': to_level,
         'extra_inactive': extra_inactive,
         'extra_active': extra_active,
+        'extra_active_mode': extra_active_mode,
         'show_invisible': show_invisible,
         'show_inactive_branch': show_inactive_branch,
     })
 
     # get result nodes tree
-    menuconf = registry.menupool.menuconf(request, name=menuconf)
-    nodes = registry.menupool.get_nodes(menuconf, request,
-                                        modifiers=modifiers, **kwargs)
+    menuconf = registry.processor.menuconf(request, name=menuconf)
+    nodes = registry.processor.get_nodes(menuconf, request,
+                                         modifiers=modifiers, **kwargs)
     if not nodes:
         return {'template': None,}
 
@@ -57,7 +58,7 @@ def load_menu(parser, token):
     class LoadMenuNode(template.Node):
         def render(self, context):
             request = get_from_context(context, 'request')
-            registry.menupool.get_nodes(None, request, init_only=True)
+            registry.processor.get_nodes(None, request, init_only=True)
             return ''
     return LoadMenuNode()
 

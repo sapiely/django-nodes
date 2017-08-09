@@ -6,18 +6,19 @@ from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.translation import get_language
 from .base import DEFAULT, ONCE, PER_REQUEST, POST_SELECT
-from .utils import import_path
+from .utils import import_path, tgenerator
 from . import settings as msettings
 
 
-class MenuPool(object):
+class Processor(object):
 
     # methods that are expected to be extended if required:
-    #   router - menuconf router by request
-    #   check_node_url_with_domain - check urls with domain specified
-    #   compare_path - compare two paths by length, get/hash existance, ect
+    #   router - menuconf router
     #   cache_key - cache name generator for confname
     #   prepare_menus_settings - prepare settings value
+    
+    #   check_node_url_with_domain - check urls with specified domain
+    #   compare_paths - compare two paths by length, get/hash existance, ect
 
     registry = None
 
@@ -30,11 +31,29 @@ class MenuPool(object):
         Simple router implementaion, based on url regexps.
         If you need more complex validation, please update this method.
         """
-        for route, conf in msettings.MENU_ROUTES:
-            if re.match(route, request.path):
-                return conf
+        if not hasattr(self, '_ROUTES'):
+            self._ROUTES = [(name, conf['ROUTE'])
+                            for name, conf in msettings.MENUS.items()
+                            if conf.get('ROUTE', None)] or None
+
+        if self._ROUTES:
+            for name, route in self._ROUTES:
+                if re.match(route, request.path):
+                    return name
 
         return 'default'
+
+    def cache_key(self, request=None, menuconf=None,
+                  lang=None, site_id=None, extra=None, **kwargs):
+        """
+        Generate cache_key by request and menuconf data, by lang and site
+        note: extra should be list or tuple, any item should be ascii string
+        """
+        lang = lang or get_language()
+        site_id = site_id or get_current_site(None).pk
+        extra = '_'.join(map(str, extra)) if extra else ''
+        return 'nodes_%s_%s_%s%s_cache' % (menuconf['NAME'],
+                                           lang, site_id, extra)
 
     def menuconf(self, request, name=None):
         """Get menuconf value, call router if required (once)"""
@@ -56,7 +75,7 @@ class MenuPool(object):
         name = name or request.nodes._menuconf_selected
         conf = request.nodes._menuconf.get(name, None)
         if not conf:
-            conf = msettings.MENU_CONF.get(name, None)
+            conf = msettings.MENUS.get(name, None)
             if conf is None:
                 raise ValueError('Menus menuconf invalid name (%s).' % name)
 
@@ -65,18 +84,8 @@ class MenuPool(object):
 
         return conf
 
-    def cache_key(self, request=None, menuconf=None,
-                  lang=None, site_id=None, extra=None, **kwargs):
-        """
-        Generate cache_key by request and menuconf data, by lang and site
-        note: extra should be list or tuple, any item should be ascii string
-        """
-        lang = lang or get_language()
-        site_id = site_id or get_current_site(None).pk
-        extra = '_'.join(map(str, extra)) if extra else ''
-        return 'nodes_%s_%s_%s%s_cache' % (menuconf['NAME'],
-                                           lang, site_id, extra)
-
+    
+    
     def post_build_data_handler(self, menuconf, nodes, request):
         """
         By default return {"nodes": nodes, "paths": paths,}.
@@ -87,6 +96,8 @@ class MenuPool(object):
         """
         nodes.update({'paths': self.build_paths(nodes['nodes']),})
 
+    
+    
     def get_nodes(self, menuconf, request,
                   modifiers=None, init_only=False, **kwargs):
         """Generate nodes by menu confname."""
@@ -94,16 +105,16 @@ class MenuPool(object):
         menuconf = self.menuconf(request, name=menuconf)
 
         # cache requested menuconf nodes in request object
-        nodes = getattr(request.nodes, '_menus', {}).get(menuconf['NAME'], None)
+        nodes = getattr(request.nodes, 'menus', {}).get(menuconf['NAME'], None)
         if nodes is None:
-            request.nodes._menus = getattr(request.nodes, '_menus', {})
+            request.nodes.menus = getattr(request.nodes, 'menus', {})
 
             # longtime between-request cached code
             cache_key = self.cache_key(request=request, menuconf=menuconf)
             nodes = cache.get(cache_key, None)
             if not nodes:
                 nodes = self.build_nodes(request, menuconf['MENUS'])
-                nodes = {'nodes': nodes, 'selected': None,}
+                nodes = {'nodes': nodes, 'selected': None, 'chain': None,}
                 self.apply_modifiers(menuconf, nodes, request, modify_event=ONCE)
                 self.post_build_data_handler(menuconf, nodes, request)
                 cache.set(cache_key, nodes, menuconf['CACHE_TIMEOUT'])
@@ -116,12 +127,13 @@ class MenuPool(object):
             # only SELECTED menuconf mark as selected
             # todo: may be add CHECK_SELECTION param to conf?
             if menuconf['SELECTED']:
-                self._mark_selected(request, nodes)
+                nodes['selected'], nodes['chain'] = self.search_selected(
+                    request, nodes)
 
             # per-request cached code (POST_SELECT)
             self.apply_modifiers(menuconf, nodes, request, modify_event=POST_SELECT)
 
-            request.nodes._menus[menuconf['NAME']] = nodes
+            request.nodes.menus[menuconf['NAME']] = nodes
 
         if init_only:
             return
@@ -132,9 +144,11 @@ class MenuPool(object):
                              modifiers=modifiers, kwargs=kwargs)
 
         # return nodes in hierarchical format
-        nodes['nodes'] = [i for i in nodes['nodes'] if not i.parent]
+        # nodes['nodes'] = [i for i in nodes['nodes'] if not i.parent]
         return nodes
 
+    
+    
     def apply_modifiers(self, menuconf, nodes, request, modify_event=DEFAULT,
                         modifiers=None, meta=None, kwargs=None):
         """
@@ -193,147 +207,149 @@ class MenuPool(object):
             if modify_event & modifier.modify_event:
                 modifier.modify(request, nodes, meta, **kwargs)
 
+    
+    
     # raw menus nodes list generator
     def build_nodes(self, request, menus):
-        """build raw full nodes array (linear) with parent links"""
-        final_nodes, ignored_nodes = {'ids':{}, 'nodes':[],}, {}
+        """Build raw nodes tree"""
+        final, ids, ignored = [], {}, {}
 
-        # get menus from registry and sort by weight attr desc
+        # get menus from registry and sort by weight attr asc
         menus = [self.registry.menus[m] for m in menus]
-        menus = sorted(menus, cmp=lambda x,y: cmp(x.weight, y.weight))
+        menus = sorted(menus, key=lambda x: x.weight)
 
         # fetch all nodes from all menus
         for menu in menus:
-            nodes, last = menu.get_nodes(request), None
+            nodes = menu.get_nodes(request)
             for node in nodes:
-                # set namespace attr and indexes (default: menu class name)
+                # set namespace attr, default: menu class name
                 node.namespace = node.namespace or menu.namespace
-                final_nodes['ids'][node.namespace] = final_nodes['ids'].get(node.namespace, [])
-                ignored_nodes[node.namespace] = ignored_nodes.get(node.namespace, [])
+                ids[node.namespace] = ids.get(node.namespace, [])
+                ignored[node.namespace] = ignored.get(node.namespace, [])
 
-                # ignore nodes with dublicated ids
-                if node.id in final_nodes['ids'][node.namespace]:
+                # ignore nodes with duplicated ids
+                if node.id in ids[node.namespace]:
                     continue
                 # process all childs
                 if node.parent:
                     found = False
                     # ignore node if parent also ignored
-                    if node.parent in ignored_nodes[node.namespace]:
-                        ignored_nodes[node.namespace].append(node.id)
+                    if node.parent in ignored[node.namespace]:
+                        ignored[node.namespace].append(node.id)
                         continue
-                    # try to find parent in ancestors chain (optimization)
-                    if last:
-                        n = last
-                        while n:
-                            if n.namespace == node.namespace and n.id == node.parent:
-                                node.parent, found, n = n, True, None
-                            else:
-                                n = n.parent or None
-                    # search parent directrly (slowly)
-                    if not found:
-                        for n in nodes:
-                            if n.namespace == node.namespace and n.id == node.parent:
-                                node.parent, found = n, True
-                    # if parent is found - append node to "brothers", else ignore invalid
+                    # search parent
+                    for n in nodes:
+                        if n.namespace == node.namespace and n.id == node.parent:
+                            node.parent, found = n, True
+                            break
+                    # append found node to its "brothers" or ignore
                     if found:
                         node.parent.children.append(node)
                     else:
-                        ignored_nodes[node.namespace].append(node.id)
+                        ignored[node.namespace].append(node.id)
                         continue
                 # append node and it id to main list
-                final_nodes['nodes'].append(node)
-                final_nodes['ids'][node.namespace].append(node.id)
-                # last node for search in ancestors
-                last = node
+                final.append(node)
+                ids[node.namespace].append(node.id)
 
-        # reindex ids in nodes array
-        final_nodes, i = final_nodes['nodes'], 1
-        for node in final_nodes:
-            node.id, i = i, i+1
-        return final_nodes
+        # reindex ids and return tree (only roots)
+        for index, node in enumerate(final, 1):
+            node.id = index
+        return [i for i in final if not i.parent]
 
-    # selection speedup by indexed search (with paths dict)
+    
+    
+    # Selection speedup by indexed search (with paths dict)
+    # -----------------------------------------------------
     def check_node_url_with_domain(self, domain, node):
         return False
 
-    def compare_path(self, path, node, ppath, pnode):
-        """Return True, if we should replace old item by new one."""
-        # Shorter path better.
-        if path != ppath:
-            return path < ppath
+    def compare_paths(self, node, prevnode):
+        """
+        Return True, if we should replace old item by new one.
+        Greater weight better.
+        """
+        return node.data.get('weight', 500) >= prevnode.data.get('weight', 500)
 
-        # Greater weight better.
-        wnew = node.data.get('menu_item_weight', 0)
-        wold = pnode.data.get('menu_item_weight', 0)
-        if wnew != wold:
-            return wnew > wold
-
-        return False
-
-    def _get_path(self, node):
+    def get_path(self, node):
         p = urlparse.urlparse(node.url_original)
         if p.netloc and not self.check_node_url_with_domain(p.netloc, node):
             return None
-        return p.path.strip('/').split('/')
+        return p.path.strip('/')
 
     def build_paths(self, nodes):
         data = {}
-        for node in nodes:
-            path = self._get_path(node)
+        for node in tgenerator(nodes):
+            path = self.get_path(node)
             # ignore nodes with denied domain name and/or empty path
             if not path:
                 continue
-
-            for item in ['/'.join(path[:i]) for i in range(1, len(path)+1)]:
-                if data.has_key(item):
-                    # check this node is better match than previous
-                    ppath = self._get_path(data[item])
-                    if self.compare_path(path, node, ppath, data[item]):
-                        data[item] = node
-                else:
-                    # link path with node
-                    data[item] = node
+            # check node is new or it is better match than previous
+            if not path in data or self.compare_paths(node, data[path]):
+                data[path] = node
         return data
 
-    def _mark_selected(self, request, data):
-        """mark current node as selected (indexed search in paths)"""
+    def search_selected(self, request, data):
+        """Search selected node (indexed search in paths)."""
 
         # id dict for speedup (indexed) node search
-        nodekeys = dict((n.id, None) for n in data['nodes'])
-        paths = data['paths']
+        nodeids = {n.id: None for n in tgenerator(data['nodes'])}
+        path, paths = request.path.strip('/').split('/'), data['paths']
 
-        path = request.path.strip('/').split('/')
-        for pkey in ['/'.join(path[:-i or None]) for i in range(0, len(path))]:
+        # check existance of path starting from current path down to its first
+        # ancestor: on "/a/b/c/" page look for "a/b/c" or "a/b" or "a" in paths
+        for pkey in ('/'.join(path[:-i or None]) for i in range(0, len(path))):
             selected = paths.get(pkey, None)
             if selected:
-                # check selected for existance in morphed with
-                # per_request modifiers nodes list (auth visibility, ect)
-                if not selected.id in nodekeys:
+                # check selected for existance in morphed by
+                # per_request modifiers nodes list (auth visibility, ect.)
+                if not selected.id in nodeids:
                     continue
 
+                # mark node as selected and return
                 selected.selected = True
-                data.update(selected=selected)
-                break
 
+                # save unmodified chain up to root
+                chain, item = [selected], selected
+                while item.parent:
+                    item = item.parent
+                    chain.insert(0, item)
+
+                return selected, chain
+        return None, None
+    
+    
+    
+    
+    
+    
+    
+    
     def add_nodes_to_request(self, request):
         """prepare request for menus processing"""
         if not hasattr(request, 'nodes'):
-            metadata = import_path(msettings.META_DATA
-                                   or msettings.DEFAULT_METADATA)
+            metadata = import_path(msettings.META_DATA)
             request.nodes = metadata()
 
+
+
+
+
+
+
+
+
     def prepare_menus_settings(self):
-        """prepare menus settings validity"""
+        """Prepare menus settings and check validity"""
 
         # get menu settings for check
-        MENU_CONF = msettings.MENU_CONF
+        MENUS = msettings.MENUS
         DEFAULT_SCHEME = msettings.DEFAULT_SCHEME
-        MENU_ROUTES = msettings.MENU_ROUTES
 
-        # check MENU_CONF
+        # check MENUS
         # todo: may be someway disable menus if improperly configured
-        if not isinstance(MENU_CONF, dict) or not MENU_CONF.has_key('default'):
-            raise ImproperlyConfigured('Menus "MENU_CONF" setting value'
+        if not isinstance(MENUS, dict) or not MENUS.has_key('default'):
+            raise ImproperlyConfigured('Menus "MENUS" setting value'
                                        ' is empty/incorrect or not contains'
                                        ' "default" key.')
 
@@ -341,7 +357,7 @@ class MenuPool(object):
                                        and all([v in chk for v in val]))
 
         errors = {}
-        for name, value in MENU_CONF.items():
+        for name, value in MENUS.items():
             # check menus value
             menus = value.get('MENUS', None)
             if not menus or not validvalue(menus, self.registry.menus.keys()):
@@ -374,8 +390,7 @@ class MenuPool(object):
             if invalid:
                 continue
 
-
-            # update conf value (alos with defaults)
+            # update conf value (also with defaults)
             value.update({
                 'MODIFIERS': modifiers,
                 'NAME': name,
@@ -386,22 +401,3 @@ class MenuPool(object):
 
         if errors:
             raise ImproperlyConfigured('\n'.join(errors.values()))
-
-        # check MENU_ROUTES TODO? should it be requeired
-        if MENU_ROUTES and not isinstance(MENU_ROUTES, (list, tuple,)):
-            raise ImproperlyConfigured('Menus "MENU_ROUTES" setting value is incorrect,'
-                                       ' it should be (list, tuple) or empty.')
-
-        errors = []
-        for route in MENU_ROUTES:
-            if not len(route) == 2 or \
-                not isinstance(route[0], basestring) or \
-                not route[1] in MENU_CONF.keys():
-
-                errors.append('Incorrect menu route value (%s). Each route should be'
-                              ' instance of list or tupe, have len equal 2, contain'
-                              ' matching pattern (string, first item) and point'
-                              ' to existing menu_conf item (second item).' % str(route))
-
-        if errors:
-            raise ImproperlyConfigured('\n'.join(errors))

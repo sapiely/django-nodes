@@ -1,9 +1,10 @@
-from base import Modifier, DEFAULT, ONCE, PER_REQUEST, POST_SELECT
+from .base import Modifier, DEFAULT, ONCE, PER_REQUEST, POST_SELECT
+from .utils import tgenerator, tcutter, tfilter
 
 
-__all__ = ('NavigationExtender', 'LoginRequired', 'Jump',
+__all__ = ('NavigationExtender', 'AuthVisibility', 'Jump',
            'Namespace', 'Level', 'Root', 'CutLevels',
-           'PositionalFlagsMarker', 'MetaDataProcessor',)
+           'PositionalMarker', 'MetaDataProcessor',)
 
 
 class Namespace(Modifier):
@@ -29,20 +30,18 @@ class Namespace(Modifier):
         if not namespace:
             return
 
-        nodes, modified = [], False
-        for node in data['nodes']:
-            if node.namespace == namespace:
-                nodes.append(node)
-                if node.parent and node.parent.namespace != namespace:
-                    node.parent, modified = None, True
-                if node.children:
-                    node.children = [c for c in node.children
-                                     if c.namespace == namespace]
+        temp = {'count': 0,} # for closure
+        def checker(node):
+            if node.namespace != namespace:
+                temp['count'] += 1
+                return False
+            return True
 
-        meta.update(**{'modified_ancestors': modified,
-                       'modified_descendants': modified,
-                       'modified_structure': modified,})
-        data['nodes'] = nodes
+        # filter nodes by namespace
+        data['nodes'] = tfilter(data['nodes'], checker)
+        temp['count'] and meta.update(modified_ancestors=True,
+                                      modified_descendants=True,
+                                      modified_structure=True)
 
 
 class Root(Modifier):
@@ -58,59 +57,47 @@ class Root(Modifier):
         if not root_id:
             return
 
-        nodes, modified = [], False
-        for node in data['nodes']:
+        nodes, modified_ancestors = [], False
+        for node in tgenerator(data['nodes']):
             if node.data.get('reverse_id', None) == root_id:
-                # unparent and get slice with descendant length
-                node.parent, modified = None, bool(node.parent)
-                index = data['nodes'].index(node)
-                nodes = data['nodes'][
-                    index:1+index+self.get_descendants_length(node)
-                ]
+                node.parent, modified_ancestors = None, bool(node.parent)
+                nodes = [node]
                 break
 
-        meta['modified_ancestors'] = modified
+        meta['modified_ancestors'] = modified_ancestors
         data['nodes'] = nodes
 
 
 class Level(Modifier):
     """
     Marks all nodes levels + save original level values (once).
-    This modifier should be set after any other modifiers, but before
-    CutLevels modifier, because it use levels values to limit nodes selection.
+    Usually this modifier should be set after any other modifiers.
 
     If any modifier breaks integrity of levels values, it should set meta's
-    "modified_structure" key to True (Namespace modifier do that),
+    "modified_ancestors" key to True (Namespace modifier do that),
     and it is means that levels values are not consistent until Level modifier
     next call.
 
-    Note that parent/children values integrity must be guaranteed
-    by any modifier.
-
+    Note: parent/children values integrity must be guaranteed by any modifier.
     Note: Level adds "level" and "level_original" attributes to any node.
     """
     modify_event = ONCE | DEFAULT
 
     def modify(self, request, data, meta, **kwargs):
         # a bit of optimizations
-        if (DEFAULT == meta['modify_event'] and not meta['modified_ancestors']):
+        if (DEFAULT == meta['modify_event'] and
+            not meta['modified_ancestors']):
             return
 
         for node in data['nodes']:
-            if not node.parent:
-                node.level = 0
-                self.mark_levels(node)
+            node.level = 0
+            for i in tgenerator(node.children):
+                i.level = i.parent.level + 1
 
-        # save original level in data (once)
+        # save original level value on ONCE event
         if ONCE == meta['modify_event']:
-            for n in data['nodes']:
+            for n in tgenerator(data['nodes']):
                 n.level_original = n.level
-
-    def mark_levels(self, node):
-        for child in node.children:
-            child.level = node.level + 1
-            self.mark_levels(child)
-
 
 class Jump(Modifier):
     """Clone child url to parent if parent is marked as "jump", recursive."""
@@ -118,78 +105,66 @@ class Jump(Modifier):
 
     def modify(self, request, data, meta, **kwargs):
         # a bit of optimizations
-        if PER_REQUEST == meta['modify_event'] and not meta['modified_descendants']:
+        if (PER_REQUEST == meta['modify_event'] and
+                not meta['modified_descendants']):
             return
 
-        nodes_chain = []
-        for node in data['nodes']:
+        chain = []
+        for node in tgenerator(data['nodes']):
             if node.children and node.data.get('jump', False):
-                nodes_chain.append(node)
-            elif nodes_chain:
-                nodes_chain.append(node)
-                self.clone_link(nodes_chain)
-                nodes_chain = []
+                chain.append(node)
+            elif chain:
+                chain.append(node)
+                self.clone_url(chain)
+                chain = []
 
-        if nodes_chain:
-            self.clone_link(nodes_chain)
-            nodes_chain = []
+        if chain:
+            self.clone_url(chain)
 
-    def clone_link(self, nodes):
-        for node in nodes[:-1]:
-            node.url = nodes[-1].url
+    def clone_url(self, chain):
+        for node in chain[:-1]:
+            node.url = chain[-1].url
 
 
-class LoginRequired(Modifier):
-    """Remove nodes that are login required or require a group."""
+class AuthVisibility(Modifier):
+    """Remove nodes that are required an auth."""
     modify_event = PER_REQUEST
 
     def modify(self, request, data, meta, **kwargs):
-        is_auth, removed_branch_length = request.user.is_authenticated(), 0
-        # main condition: if user is authenticated, allow all nodes
-        if is_auth:
+        # if user is authenticated, allow all nodes
+        if request.user.is_authenticated():
             return
 
-        nodes = []
-        for node in data['nodes']:
-            if removed_branch_length:
-                removed_branch_length -= 1
-                continue
+        temp = {'count': 0,} # in closure
+        def checker(node):
+            if node.data.get('auth_required', False):
+                temp['count'] += 1
+                return False
+            return True
 
-            if not (is_auth if node.data.get('auth_required', False) else True):
-                removed_branch_length = self.get_descendants_length(node)
-                node.parent and node.parent.children.remove(node)
-            else:
-                nodes.append(node)
-
-        meta['modified_descendants'] = len(nodes) != len(data['nodes'])
-        data['nodes'] = nodes
+        # cut auth_required nodes
+        data['nodes'] = tcutter(data['nodes'], checker)
+        temp['value'] and meta.update(modified_descendants=True)
 
 
 class NavigationExtender(Modifier):
-    """Extends menu item with another menu"""
+    """Extends menu item with another menu."""
     modify_event = ONCE
 
     def modify(self, request, data, meta, **kwargs):
-        extenders, resort = [], False
-        # rearrange the parent relations
-        nodes = data['nodes']
-        for node in nodes:
-            currexts = node.data.get("navigation_extenders", None)
-            if not currexts:
+        nodes, processed = data['nodes'], []
+        for node in tgenerator(nodes):
+            extenders = node.data.get("navigation_extenders", None)
+            if not extenders:
                 continue
-            for currext in currexts:
-                if currext in extenders:
+            for extender in extenders:
+                if extender in processed:
                     continue
-                extenders.append(currext)
-                for n in nodes:
-                    # if root node has navigation extenders
-                    if n.namespace == currext and not n.parent:
-                        n.parent, resort = node, True
+                processed.append(extender)
+                for n in nodes: # process root nodes with extenders
+                    if n.namespace == extender:
+                        n.parent = node
                         node.children.append(n)
-
-        # reindex nodes if required
-        if resort:
-            nodes = self.format_nodes(nodes, linear=True)
 
         data['nodes'] = nodes
 
@@ -199,7 +174,8 @@ class MetaDataProcessor(Modifier):
 
     def modify(self, request, data, meta, **kwargs):
         selected = data['selected']
-        chain = self._get_full_chain(data['nodes'], selected)
+        chain = [i for i in (data['chain'] or [])
+                 if i.data.get('visible_in_chain', True)]
 
         metadata = request.nodes
         metadata.selected = selected
@@ -218,218 +194,299 @@ class MetaDataProcessor(Modifier):
             # set selected meta_title to title tag anyway
             metadata.title.append(selected.data.get('meta_title', u'') or selected.title)
 
-    def _get_full_chain(self, nodes, selected):
-        """get all chain elements from nodes list"""
-        ancestors = []
-        if selected and not selected.parent:
-            if selected.data.get('visible_in_chain', True):
-                ancestors.append(selected)
-        elif selected:
-            n = selected
-            while n:
-                if n.data.get('visible_in_chain', True):
-                    ancestors.append(n)
-                n = n.parent
-        ancestors.reverse()
-        return ancestors
 
-
-class PositionalFlagsMarker(Modifier):
+class PositionalMarker(Modifier):
     """
-    Note: Marker adds "sibling", "ancestor", "descendant", "selected"
-        and "leaf" attributes to any node.
+    Marker adds "sibling", "ancestor", "descendant", "selected"
+    and "leaf" attributes to any node.
     """
     modify_event = ONCE | POST_SELECT
 
     def modify(self, request, data, meta, **kwargs):
         """
         On ONCE just add required attributes.
-        On POST_SELECT check is selected exists, if no - just mark leaf nodes
-        else mark siblings, ancestors, descendants and leaf.
+        On POST_SELECT mark leaf nodes and if selected exists,
+            mark siblings, ancestors and descendants.
         """
 
+        nodes, selected = data['nodes'], data['selected']
+
         if (ONCE == meta['modify_event']):
-            for node in data['nodes']:
+            for node in tgenerator(nodes):
                 node.sibling = node.leaf = False
                 node.ancestor = node.descendant = False
             return
-        elif not data['selected']:
-            for node in data['nodes']:
-                node.leaf = not node.children
+
+        # mark leafs # does it really need?
+        for node in tgenerator(nodes):
+            node.leaf = not node.children
+
+        if not selected:
             return
 
-        selected, root_nodes = None, []
-        for node in data['nodes']:
-            node.leaf = not node.children
-            node.parent or root_nodes.append(node)
-            if node.selected:
-                selected = node
-                if node.parent:
-                    n = node
-                    while n.parent:
-                        n = n.parent
-                        n.ancestor = True
-                    for sibling in node.parent.children:
-                        sibling.sibling = not sibling.selected
-                if node.children:
-                    self._mark_descendants(node.children)
-        if selected and not selected.parent:
-            for n in root_nodes:
-                n.sibling = not n.selected
-        return selected
+        # mark siblings
+        siblings = selected.parent.children if selected.parent else nodes
+        for i in siblings:
+            i.sibling = not i.selected
 
-    def _mark_descendants(self, nodes):
-        for node in nodes:
-            node.descendant = True
-            node.children and self._mark_descendants(node.children)
+        # mark ancestors
+        ancestor = selected
+        while ancestor.parent:
+            ancestor = ancestor.parent
+            ancestor.ancestor = True
+
+        # mark descendants
+        for i in tgenerator(selected.children):
+            i.descendant = True
 
 
 class CutLevels(Modifier):
     """
-    Filters nodes by level value and/or visible value.
-    Depends on Level and PositionalFlagsMarker
+    Filters nodes by its level and/or visible value.
+    Depends on PositionalMarker if root descendants expected.
     """
     modify_event = DEFAULT
 
+    # !!! VISIBILITY
     def modify(self, request, data, meta, **kwargs):
         """
         Cut nodes by levels away from menus, also check visibility.
         Modifier waits "cut_levels" kwargs key, which contains all required
         values: (from_level, to_level, extra_inactive, extra_active,
-                 show_invisible, show_inactive_branch)
+                 extra_active_mode, show_invisible, show_inactive_branch)
+        Algorithm:
+        1. Get selected trail.
+        3. Cut inactive root in range from_level..to_level|extra_inactive.
+        3. Process root trail node.
+            3.1. Cut active after to_level|extra_active with considering
+                 of extra_active_mode value.
+            3.2. Cut root active node before from_level.
+            3.3. Cut inactive in active branch after to_level|extra_inactive.
+        4. Cut active root if descendant property set to True.
         """
 
+        # get argumets from cut_levels keyword argumet
         cut_levels = kwargs.get('cut_levels', None)
         if (not cut_levels or not isinstance(cut_levels, dict)
-            or not len(cut_levels) == 6 or not data['nodes']):
+            or not len(cut_levels) == 7 or not data['nodes']):
             return
 
-        (from_level, to_level, extra_inactive, extra_active,
-         show_invisible, show_inactive_branch) = map(cut_levels.get, [
+        (from_level, to_level, extra_inactive, extra_active, extra_active_mode,
+         show_invisible, show_inactive_branch,) = map(cut_levels.get, [
             'from_level', 'to_level', 'extra_inactive', 'extra_active',
-            'show_invisible', 'show_inactive_branch',
-        ])
+            'extra_active_mode', 'show_invisible', 'show_inactive_branch',
+         ])
 
-        # get level values related to current state
+        # nodes current state values
+        nodes, selected, chain = data['nodes'], data['selected'], data['chain']
+
+        # (1) search for selected trail
+        trail = self.get_trail(nodes, chain)
+
+        # get level values related to selected node
         from_level, to_level, extra_inactive, extra_active = self.parse_params(
-            request, data, from_level, to_level, extra_inactive, extra_active
-        )
+            trail, chain, from_level, to_level, extra_inactive, extra_active)
 
-        # default values
-        nodes, selected, final = data['nodes'], data['selected'], []
-        removed, in_branch = {}, False
         # check: show only active branch - ignore nodes on from_level
         # from inactive branches (not sel-sib-desc or with ancestor parent)
-        only_active_branch = (not show_inactive_branch
-                              and nodes[0].level < from_level)
+        only_active_branch = (not show_inactive_branch and from_level > 0)
 
-        # main loop
+        # process nodes with algorithm
+        final = []
         for node in nodes:
-            # ignore nodes, which already is removed
-            if node.id in removed:
-                continue
-
-            # check only active branch if some conditions (see above)
-            # (node has parent value anyway, if only_active_branch is True)
-            if only_active_branch:
-                # check node is in selected branch: if node is sel-sib-desc
-                # or if parent is ancestor (parent.ancestor is True)
-                if not in_branch and node.level == from_level:
-                    in_branch = (node.descendant or node.parent.ancestor
-                                                 or node.sibling
-                                                 or node.selected)
-                # break if node lower then from_level (selected branch
-                # retrieved completely at this moment)
-                elif in_branch and node.level < from_level:
-                    break
-                # just ignore left side relative to selected branch
-                if not in_branch:
-                    continue
-            # ignore nodes lower then from_level
-            elif node.level < from_level:
-                continue
-
-            # remove nodes that are too deep or invisible if not show_invisible
-            if (node.level > to_level) or (not show_invisible and not node.visible):
-                self.remove(node, removed)
-                continue
-
-            # cut inactive nodes to extra_inactive (not any of sel-sib-desc)
-            # or cut active nodes (selected node's descendants) to extra_active
-            if node.children:
-                if not (node.selected or node.ancestor or node.descendant):
-                    self.cut_after(node, extra_inactive, removed)
-                elif node.selected:
-                    self.cut_after(node, extra_active, removed)
-
-            # turn nodes that are on from_level into root nodes (unparent)
-            # also, if root node is descendant, then selected node lower then
-            # from_level, but root still in active branch, so cut extra_active
-            if node.level == from_level:
-                node.parent = None
-                if node.descendant:
-                    self.cut_after(node, extra_active, removed)
-
-            final.append(node)
+            if trail and node == trail[0]:
+                # (3) process trail (active branch)
+                items = self.cut_before_and_after_active(
+                    trail, from_level, to_level, extra_inactive, extra_active,
+                    extra_active_mode, only_active_branch, show_invisible)
+            elif getattr(node, 'descendant', True):
+                # (4) cut active root if it descendant
+                items = self.cut_before_and_after(
+                    node, from_level, to_level, extra_active,
+                    False, show_invisible)
+            else:
+                # (2) cut inactive in from_level..to_level|extra_active
+                items = self.cut_before_and_after(
+                    node, from_level, to_level, extra_inactive,
+                    only_active_branch, show_invisible)
+            final.extend(items)
 
         # update meta information and nodes data
-        if len(final) != len(data['nodes']):
-            meta.update(modified_ancestors=from_level > 0,
-                        modified_descendants=True)
-        data['nodes'] = final
+        meta.update(
+            modified_ancestors=from_level or meta['modified_ancestors'],
+            modified_descendants=True # let it be modified anyway
+        )
 
-    def cut_after(self, node, level, removed):
+        data['nodes'] = final
+        return data
+
+    def cut_after(self, node, current_level, to_level, show_invisible=False):
         """Cut nodes from tree after specified level."""
         if not node.children:
             return
-        elif level <= node.level:
-            for n in node.children:
-                removed[n.id] = None
-                n.children and self.cut_after(n, 0, removed)
+        elif to_level <= current_level:
             node.children = []
         else:
+            if not show_invisible:
+                node.children = [i for i in node.children if i.visible]
             for n in node.children:
-                n.children and self.cut_after(n, level-1, removed)
+                n.children and self.cut_after(n, current_level+1, to_level)
+        return node
 
-    def remove(self, node, removed):
-        """Remove node from tree."""
-        removed[node.id] = None
-        if node.parent and node in node.parent.children:
-            node.parent.children.remove(node)
-        if node.children:
-            self.cut_after(node, 0, removed)
+    def cut_before_and_after(self, node, from_level, to_level, extra_level,
+                             only_active_branch, show_invisible):
+        """Cut node in range from_level..to_level|extra_level"""
+        # empty on active branch only or unconditional cut by range
+        if only_active_branch or from_level > to_level:
+            return []
 
-    def parse_params(self, request, data, *params):
+        # cut before from_level
+        level, final = 0, [node]
+        while level < from_level:
+            final, line, level = [], final, level+1
+            for i in line:
+                final.extend(i.children)
+                for j in i.children:
+                    j.parent = None
+
+        # check visibility in from_level
+        if not show_invisible:
+            final = [i for i in final if i.visible]
+
+        # cut after to_level|extra_level
+        for i in final:
+            self.cut_after(i, level, min(to_level, extra_level),
+                           show_invisible)
+        return final
+
+    def cut_after_active(self, node, trail, to_level, show_invisible):
+        """Cut inactive from trail in range index-of-node..last-but-one."""
+        index = trail.index(node)
+        while index < len(trail)-1: # exclude last of trail elements
+            node, index = trail[index], index+1
+            if not show_invisible:
+                node.children = [i for i in node.children if i.visible]
+            for i in node.children:
+                i not in trail and self.cut_after(i, index, to_level)
+
+    def cut_before_and_after_active(self, trail, from_level, to_level,
+                                    extra_inactive, extra_active,
+                                    extra_active_mode, only_active_branch,
+                                    show_invisible):
         """
-        Process params with {so}, {s}, {ro}, {r} patterns, if defined.
+        Cut active node in range from_level..to_level|extra_active with
+        considering of extra_active_mode and inactive in active branch
+        in range from_level..to_level|extra_inactive.
+        """
+
+        # empty on unconditional cut by range
+        if from_level > to_level:
+            return []
+
+        extra_inactive = min(to_level, extra_inactive)
+        extra_active = min((extra_active if extra_active_mode else
+                            max(extra_active, len(trail)-1), to_level))
+        extra_active_strict = (extra_active_mode != 2 or
+                               to_level <= extra_active or
+                               extra_inactive <= extra_active)
+
+        # check visibility in trail
+        if not show_invisible:
+            for i in trail:
+                if not i.visible:
+                    i.parent and i.parent.children.remove(i)
+                    trail[trail.index(i):] = []
+                    if not trail:
+                        return []
+                    break
+
+        # (3.1.) cut extra_active
+        if extra_active < len(trail)-1:
+            # reduce trail and cut with considering of extra_active_mode
+            trail[extra_active].children = [] if extra_active_strict else [
+                self.cut_after(i, extra_active+1, extra_inactive,
+                               show_invisible)
+                for i in trail[extra_active].children
+                if i not in trail and (show_invisible or i.visible)
+            ]
+            trail[extra_active+1:] = []
+            active_branch = set(trail)
+        else:
+            # just cut after selected and add all descendant into set
+            self.cut_after(trail[-1], len(trail)-1, extra_active,
+                           show_invisible)
+            active_branch = (set(trail) if from_level < len(trail) else
+                             set(trail + list(tgenerator(trail[-1].children))))
+
+        # (3.2.) cut before from_level
+        level, final = 0, [trail[0]]
+        while level < from_level:
+            final, line, level = [], final, level+1
+            for i in line:
+                children = [j for j in i.children
+                            if not only_active_branch or j in active_branch]
+                final.extend(children)
+                for j in children:
+                    j.parent = None
+
+        # check visibility in from_level
+        if not show_invisible:
+            final = [i for i in final if i.visible]
+        # (3.3.) cut inactive in active branch after to_level|extra_inactive
+        for i in final:
+            if i not in active_branch:
+                self.cut_after(i, level, min(to_level, extra_inactive),
+                               show_invisible)
+            elif i in trail:
+                self.cut_after_active(i, trail, min(to_level, extra_inactive),
+                                      show_invisible)
+
+        return final
+
+    def get_trail(self, nodes, chain):
+        """
+        Get selected or closest to selected ancestor, presented in nodes,
+        and all its ancestors.
+        """
+        index = len(chain)
+        while index:
+            snode = chain[index-1]
+            trail = [snode]
+            while snode.parent:
+                snode = snode.parent
+                trail.insert(0, snode)
+            if trail[0] in nodes:
+                return trail
+            index -= 1
+        return []
+
+    def parse_params(self, trail, chain, *params):
+        """
+        Process params with {so} and {s} patterns, if defined.
         Allowed values:
             (0, 10, 10, 10,)                - direct integer values,
-            ({s}, {s}+10, {ro}+1, {s}+10,)  - expressions (see below)
+            ({s}, {s}+10, {so}+1, {so}+10,) - expressions (see below)
 
-        Values should contains only digits, [+-] signs and {so}, {s}, {ro}, {r}
-        patterns, which are selected, selected-original, root and root-original
+        Values should contains only digits, [+-] signs and {s}, {so}
+        patterns (no space allowed), which are selected (deepest chain node
+        detected in nodes) and selected-original (real original level value)
         level values respectively. If value is invalid - it will be set to 0.
         """
 
-        check = lambda x: isinstance(x, int) and x >= 0
-        nodes, selected = data['nodes'], data['selected']
-        root = nodes and nodes[0] or None
-
-        # get selected-original, selected, root-original, root
-        so, s = (selected.level_original, selected.level) if selected else (0, 0,)
-        ro, r = (root.level_original, root.level,) if root else (0, 0,)
+        # get selected-original, selected
+        so, s = (len(chain)-1, len(trail)-1) if chain else (0, 0,)
 
         # params as list for direct assignation (*args are tuple)
         params = list(params)
 
         # process each params
         for i, param in enumerate(params):
-            if check(param):
+            if isinstance(param, int) and param >= 0:
                 continue
-            param = (str(param) or '0') if param else '0'
-            param = param.format(so=so, s=s, ro=ro, r=r)
-            value = param.replace('+', '').replace('-', '').isdigit()
-            value = eval(param) if value else 0
+            param = (str(param).format(so=so, s=s) or '0') if param else '0'
+            value = (eval(param)
+                     if param.replace('+', '').replace('-', '').isdigit()
+                     else 0)
             params[i] = value if value > 0 else 0
 
         return params

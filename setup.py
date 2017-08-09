@@ -24,8 +24,7 @@ setup(
 
     url='https://bitbucket.org/sakkada/django-nodes/',
 
-    packages=['nodes',
-              'menus',],
+    packages=['nodes',],
     license = 'MIT license',
 
     requires=['django (>= 1.4)'],

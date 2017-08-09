@@ -23,24 +23,23 @@ class Registry(object):
         self.menus = {}
         self.modifiers = {}
         self.discovered = False
-        self._menupool = None
+        self._processor = None
 
     @property
-    def menupool(self):
-        if not self._menupool:
-            menupool = import_path(
-                msettings.MENU_POOL or msettings.DEFAULT_MENU_POOL)
-            self._menupool = menupool(self)
+    def processor(self):
+        if not self._processor:
+            processor = import_path(msettings.PROCESSOR)
+            self._processor = processor(self)
             self.autodiscover() # also autodiscover once
 
             # prepare and check settings correctness
             try:
-                self._menupool.prepare_menus_settings()
+                self._processor.prepare_menus_settings()
             except:
-                self._menupool = None
+                self._processor = None
                 raise
 
-        return self._menupool
+        return self._processor
 
     def autodiscover(self):
         if self.discovered:
@@ -92,8 +91,7 @@ class Menu(object):
             self.namespace = self.__class__.__name__
 
     def get_navigation_node_class(self):
-        return import_path(msettings.NAVIGATION_NODE
-                           or msettings.DEFAULT_NAVIGATION_NODE)
+        return import_path(msettings.NAVIGATION_NODE)
 
     def get_nodes(self, request):
         """should return a list of NavigationNode instances"""
@@ -112,34 +110,6 @@ class Modifier(object):
         Nodes should be always returned in linear format.
         """
         raise NotImplementedError
-
-    def get_descendants_length(self, node, length=0):
-        if node.children:
-            for child in node.children:
-                length += 1 + self.get_descendants_length(child)
-        return length
-
-    def get_descendants(self, node, nodes=None):
-        nodes = nodes or []
-        for n in node.children:
-            nodes.append(n)
-            if n.children:
-                nodes = self.get_descendants(n, nodes=nodes)
-        return nodes
-
-    def format_nodes(self, nodes, linear=True):
-        # get hierarchical nodes
-        nodes = [node for node in nodes if not node.parent]
-
-        # hierarchical (not linear)
-        if not linear:
-            return nodes
-
-        # linear
-        final = []
-        for node in nodes:
-            final += [node] + self.get_descendants(node)
-        return final
 
 
 class NavigationNode(object):
@@ -173,12 +143,6 @@ class NavigationNode(object):
 
     def __repr__(self):
         return u'<Navigation Node: %s>' % self.title
-
-    def get_descendants(self):
-        nodes = []
-        for node in self.children:
-            nodes += [node] + node.get_descendants()
-        return nodes
 
 
 class MetaData(object):
