@@ -32,7 +32,7 @@ def show_meta_selected(context, pattern="<h1>%s</h1>"):
     request = get_from_context(context, 'request')
     selected = request.nodes.selected
     pattern = pattern if '%s' in pattern else '%s'
-    pattern = (selected.data.get('title', selected.title)
+    pattern = (pattern % selected.data.get('title', selected.title)
                if selected and selected.data.get('show_meta_selected', True)
                else '')
     return mark_safe(pattern)
