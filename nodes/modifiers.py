@@ -30,7 +30,8 @@ class Namespace(Modifier):
         if not namespace:
             return
 
-        temp = {'count': 0,} # for closure
+        temp = {'count': 0,}  # for closure
+
         def checker(node):
             if node.namespace != namespace:
                 temp['count'] += 1
@@ -40,8 +41,7 @@ class Namespace(Modifier):
         # filter nodes by namespace
         data['nodes'] = tfilter(data['nodes'], checker)
         temp['count'] and meta.update(modified_ancestors=True,
-                                      modified_descendants=True,
-                                      modified_structure=True)
+                                      modified_descendants=True)
 
 
 class Root(Modifier):
@@ -86,7 +86,15 @@ class Level(Modifier):
     def modify(self, request, data, meta, **kwargs):
         # a bit of optimizations
         if (DEFAULT == meta['modify_event'] and
-            not meta['modified_ancestors']):
+                not meta['modified_ancestors']):
+            return
+
+        # rebuild mode: add level values to new nodes and exit
+        if ONCE == meta['modify_event'] and meta['rebuild_mode']:
+            for node in data.get('rebuilt_nodes', []):
+                for i in tgenerator(node.children):
+                    i.level = i.parent.level + 1
+                    i.level_original = i.level
             return
 
         for node in data['nodes']:
@@ -96,8 +104,9 @@ class Level(Modifier):
 
         # save original level value on ONCE event
         if ONCE == meta['modify_event']:
-            for n in tgenerator(data['nodes']):
-                n.level_original = n.level
+            for i in tgenerator(data['nodes']):
+                i.level_original = i.level
+
 
 class Jump(Modifier):
     """Clone child url to parent if parent is marked as "jump", recursive."""
@@ -106,7 +115,10 @@ class Jump(Modifier):
     def modify(self, request, data, meta, **kwargs):
         # a bit of optimizations
         if (PER_REQUEST == meta['modify_event'] and
-                not meta['modified_descendants']):
+            not meta['modified_descendants']) or (
+                ONCE == meta['modify_event'] and meta['rebuild_mode'] and
+                not [i for i in data.get('rebuilt_nodes', [])
+                     if i.data.get('jump', False)]):
             return
 
         chain = []
@@ -135,16 +147,21 @@ class AuthVisibility(Modifier):
         if request.user.is_authenticated():
             return
 
-        temp = {'count': 0,} # in closure
+        temp = {'count': 0,}  # in closure
+
         def checker(node):
             if node.data.get('auth_required', False):
                 temp['count'] += 1
                 return False
             return True
 
-        # cut auth_required nodes
-        data['nodes'] = tcutter(data['nodes'], checker)
-        temp['value'] and meta.update(modified_descendants=True)
+        # cut auth_required nodes (all or only rebuilt)
+        nodes = ([i.children for i in data.get('rebuilt_nodes', [])]
+                 if meta['rebuild_mode'] else [data['nodes']])
+        for i in nodes:
+            tcutter(i, checker)
+
+        temp['count'] and meta.update(modified_descendants=True)
 
 
 class NavigationExtender(Modifier):
@@ -154,6 +171,10 @@ class NavigationExtender(Modifier):
     def modify(self, request, data, meta, **kwargs):
         nodes, processed = data['nodes'], []
         for node in tgenerator(nodes):
+            # a bit of optimizations
+            if meta['rebuild_mode']:
+                return
+
             extenders = node.data.get("navigation_extenders", None)
             if not extenders:
                 continue
@@ -161,7 +182,7 @@ class NavigationExtender(Modifier):
                 if extender in processed:
                     continue
                 processed.append(extender)
-                for n in nodes: # process root nodes with extenders
+                for n in nodes:  # process root nodes with extenders
                     if n.namespace == extender:
                         n.parent = node
                         node.children.append(n)
@@ -212,6 +233,8 @@ class PositionalMarker(Modifier):
         nodes, selected = data['nodes'], data['selected']
 
         if (ONCE == meta['modify_event']):
+            nodes = (data.get('rebuilt_nodes', [])
+                     if meta['rebuild_mode'] else nodes)
             for node in tgenerator(nodes):
                 node.sibling = node.leaf = False
                 node.ancestor = node.descendant = False
@@ -267,21 +290,21 @@ class CutLevels(Modifier):
 
         # get argumets from cut_levels keyword argumet
         cut_levels = kwargs.get('cut_levels', None)
-        if (not cut_levels or not isinstance(cut_levels, dict)
-            or not len(cut_levels) == 7 or not data['nodes']):
+        if (not cut_levels or not isinstance(cut_levels, dict) or
+                not len(cut_levels) == 7 or not data['nodes']):
             return
 
         (from_level, to_level, extra_inactive, extra_active, extra_active_mode,
          show_invisible, show_inactive_branch,) = map(cut_levels.get, [
-            'from_level', 'to_level', 'extra_inactive', 'extra_active',
-            'extra_active_mode', 'show_invisible', 'show_inactive_branch',
+             'from_level', 'to_level', 'extra_inactive', 'extra_active',
+             'extra_active_mode', 'show_invisible', 'show_inactive_branch',
          ])
 
         # nodes current state values
-        nodes, selected, chain = data['nodes'], data['selected'], data['chain']
+        nodes, chain = data['nodes'], data['chain']
 
         # (1) search for selected trail
-        trail = self.get_trail(nodes, chain)
+        trail = chain and self.get_trail(nodes, chain)
 
         # get level values related to selected node
         from_level, to_level, extra_inactive, extra_active = self.parse_params(
@@ -314,7 +337,7 @@ class CutLevels(Modifier):
         # update meta information and nodes data
         meta.update(
             modified_ancestors=from_level or meta['modified_ancestors'],
-            modified_descendants=True # let it be modified anyway
+            modified_descendants=True  # let it be modified anyway
         )
 
         data['nodes'] = final
@@ -362,7 +385,7 @@ class CutLevels(Modifier):
     def cut_after_active(self, node, trail, to_level, show_invisible):
         """Cut inactive from trail in range index-of-node..last-but-one."""
         index = trail.index(node)
-        while index < len(trail)-1: # exclude last of trail elements
+        while index < len(trail)-1:  # exclude last of trail elements
             node, index = trail[index], index+1
             if not show_invisible:
                 node.children = [i for i in node.children if i.visible]

@@ -42,7 +42,7 @@ def show_meta_keywords(context, main_keywords='', with_tag=False, as_default=Tru
     request     = get_from_context(context, 'request')
     keywords    = [main_keywords] if main_keywords else []
     keywords    = (request.nodes.keywords or keywords
-                    if as_default else keywords + request.nodes.keywords)
+                   if as_default else keywords + request.nodes.keywords)
     keywords    = u''.join([(u' %s' % i if i else u'') for i in keywords]).strip()
     keywords    = u'<meta name="keywords" content="%s" />' % keywords if keywords and with_tag else keywords
     return mark_safe(keywords)
@@ -52,7 +52,7 @@ def show_meta_description(context, main_description='', with_tag=False, as_defau
     request         = get_from_context(context, 'request')
     description     = [main_description] if main_description else []
     description     = (request.nodes.description or description
-                        if as_default else description + request.nodes.description)
+                       if as_default else description + request.nodes.description)
     description     = u''.join([(u' %s' % i if i else u'') for i in description]).strip()
     description     = u'<meta name="description" content="%s" />' % description if description and with_tag else description
     return mark_safe(description)

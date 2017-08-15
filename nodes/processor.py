@@ -5,18 +5,16 @@ from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.translation import get_language
-from .base import DEFAULT, ONCE, PER_REQUEST, POST_SELECT
+from .base import Menu, DEFAULT, ONCE, PER_REQUEST, POST_SELECT
 from .utils import import_path, tgenerator
 from . import settings as msettings
 
 
 class Processor(object):
-
     # methods that are expected to be extended if required:
     #   router - menuconf router
     #   cache_key - cache name generator for confname
-    #   prepare_menus_settings - prepare settings value
-    
+    #   post_build_data_handler - update data after ONCE
     #   check_node_url_with_domain - check urls with specified domain
     #   compare_paths - compare two paths by length, get/hash existance, ect
 
@@ -84,20 +82,8 @@ class Processor(object):
 
         return conf
 
-    
-    
-    def post_build_data_handler(self, menuconf, nodes, request):
-        """
-        By default return {"nodes": nodes, "paths": paths,}.
-        Paths using for indexed search of selected node. If you wll find
-        faster method, you can override all behaviour, including selected node
-        decetion.
-        All result data must be serializable.
-        """
-        nodes.update({'paths': self.build_paths(nodes['nodes']),})
-
-    
-    
+    # Nodes processing methods
+    # ------------------------
     def get_nodes(self, menuconf, request,
                   modifiers=None, init_only=False, **kwargs):
         """Generate nodes by menu confname."""
@@ -109,29 +95,55 @@ class Processor(object):
         if nodes is None:
             request.nodes.menus = getattr(request.nodes, 'menus', {})
 
-            # longtime between-request cached code
             cache_key = self.cache_key(request=request, menuconf=menuconf)
-            nodes = cache.get(cache_key, None)
-            if not nodes:
-                nodes = self.build_nodes(request, menuconf['MENUS'])
-                nodes = {'nodes': nodes, 'selected': None, 'chain': None,}
-                self.apply_modifiers(menuconf, nodes, request, modify_event=ONCE)
-                self.post_build_data_handler(menuconf, nodes, request)
-                cache.set(cache_key, nodes, menuconf['CACHE_TIMEOUT'])
+            cache_required = False
+            rebuild_mode = False
+            rebuild_countdown = 10
 
-            # per-request cached code (PER_REQUEST)
-            self.apply_modifiers(menuconf, nodes, request, modify_event=PER_REQUEST)
+            while rebuild_countdown:
+                rebuild_countdown -= 1
+                meta = {'rebuild_mode': rebuild_mode,}
+                nodes = cache.get(cache_key, None) if nodes is None else nodes
 
-            # selected node related code
-            # check - does menu routed (SELECTED) or requested directly
-            # only SELECTED menuconf mark as selected
-            # todo: may be add CHECK_SELECTION param to conf?
-            if menuconf['SELECTED']:
-                nodes['selected'], nodes['chain'] = self.search_selected(
-                    request, nodes)
+                if nodes is None:
+                    nodes = self.build_nodes(request, menuconf['MENUS'])
+                    nodes = {'nodes': nodes, 'selected': None, 'chain': None,}
+                    cache_required = True
+
+                # running once cached code (ONCE)
+                self.apply_modifiers(menuconf, nodes, request,
+                                     modify_event=ONCE, meta=meta)
+                self.post_build_data_handler(menuconf, nodes, request, meta)
+
+                if cache_required and not rebuild_mode:
+                    cache.set(cache_key, nodes, menuconf['CACHE_TIMEOUT'])
+
+                # per-request cached code (PER_REQUEST)
+                self.apply_modifiers(menuconf, nodes, request,
+                                     modify_event=PER_REQUEST, meta=meta)
+
+                # selected node related code
+                # check - does menu routed (SELECTED) or requested directly
+                # only SELECTED menuconf mark as selected
+                # todo: may be add CHECK_SELECTION param to conf?
+                if menuconf['SELECTED']:
+                    selected, chain = self.search_selected(request, nodes)
+                    rebuild_mode = (
+                        selected and not getattr(selected, 'rebuilt', None) and
+                        selected.on_selected(menuconf, nodes, request))
+                    if rebuild_mode:
+                        selected.selected, selected.rebuilt = False, True
+                        continue
+
+                    nodes.update(selected=selected, chain=chain)
+                break
+
+            if not rebuild_countdown:
+                raise Exception('Nodes: too deep rebuild cycle.')
 
             # per-request cached code (POST_SELECT)
-            self.apply_modifiers(menuconf, nodes, request, modify_event=POST_SELECT)
+            self.apply_modifiers(menuconf, nodes, request,
+                                 modify_event=POST_SELECT)
 
             request.nodes.menus[menuconf['NAME']] = nodes
 
@@ -143,12 +155,8 @@ class Processor(object):
         self.apply_modifiers(menuconf, nodes, request, modify_event=DEFAULT,
                              modifiers=modifiers, kwargs=kwargs)
 
-        # return nodes in hierarchical format
-        # nodes['nodes'] = [i for i in nodes['nodes'] if not i.parent]
         return nodes
 
-    
-    
     def apply_modifiers(self, menuconf, nodes, request, modify_event=DEFAULT,
                         modifiers=None, meta=None, kwargs=None):
         """
@@ -169,29 +177,22 @@ class Processor(object):
                 modifiers speed-up their processing. Builtin keys:
 
                 modify_event - event value apply_modifiers called with,
-                rebuld_mode - in ONCE and PER_REQUEST events means that
+                rebuild_mode - in ONCE and PER_REQUEST events means that
                     apply_modifiers executed second or more time,
                 modified_ancestors - should be set to True by modifier,
-                    if any parent propery value modified
+                    if any parent value modified
                 modified_descendants - should be set to True by modifier,
-                    if any children propery values modified
-                modified_structure - should be set to True by modifier,
-                    if modifier changes original structure (for example,
-                    Namespace modifier set this param for Level modifier).
-                modified_nodes - should be set to True by modifier,
-                    if any node was dynamically activated/generated.
+                    if any children value modified
 
                 User can provide any other keys to your own modifiers.
         """
 
         # process arguments
         menuconf, kwargs = self.menuconf(request, name=menuconf), kwargs or {}
-        meta = meta or {
-            'modify_event': None, 'rebuld_mode': False,
-            'modified_ancestors': False, 'modified_nodes': False,
-            'modified_structure': False, 'modified_descendants': False,
-        }
-        meta.update(modify_event=modify_event)
+        meta = dict({
+            'modify_event': None, 'rebuild_mode': False,
+            'modified_ancestors': False, 'modified_descendants': False,
+        }, **dict(meta or {}, modify_event=modify_event))
 
         # get (cached) value of modifiers by menuconf name and modifiers group
         modifconf = modifiers or 'default'
@@ -207,15 +208,14 @@ class Processor(object):
             if modify_event & modifier.modify_event:
                 modifier.modify(request, nodes, meta, **kwargs)
 
-    
-    
     # raw menus nodes list generator
     def build_nodes(self, request, menus):
         """Build raw nodes tree"""
         final, ids, ignored = [], {}, {}
 
         # get menus from registry and sort by weight attr asc
-        menus = [self.registry.menus[m] for m in menus]
+        menus = [m if isinstance(m, Menu) else self.registry.menus[m]
+                 for m in menus]
         menus = sorted(menus, key=lambda x: x.weight)
 
         # fetch all nodes from all menus
@@ -252,13 +252,19 @@ class Processor(object):
                 final.append(node)
                 ids[node.namespace].append(node.id)
 
-        # reindex ids and return tree (only roots)
-        for index, node in enumerate(final, 1):
-            node.id = index
         return [i for i in final if not i.parent]
 
-    
-    
+    def post_build_data_handler(self, menuconf, nodes, request, meta):
+        """
+        By default updates nodes with {"paths": paths,}.
+        Paths using for indexed search of selected node. If you will find
+        faster method, you can override all behaviour, including selected node
+        detection.
+        All result data must be serializable.
+        """
+        if not meta['rebuild_mode']:
+            nodes.update({'paths': self.build_paths(nodes['nodes']),})
+
     # Selection speedup by indexed search (with paths dict)
     # -----------------------------------------------------
     def check_node_url_with_domain(self, domain, node):
@@ -289,55 +295,46 @@ class Processor(object):
                 data[path] = node
         return data
 
+    def merge_paths(self, paths, newpaths):
+        for path, node in newpaths.items():
+            # check node is new or it is better match than previous
+            if not path in paths or self.compare_paths(node, paths[path]):
+                paths[path] = node
+
     def search_selected(self, request, data):
         """Search selected node (indexed search in paths)."""
-
-        # id dict for speedup (indexed) node search
-        nodeids = {n.id: None for n in tgenerator(data['nodes'])}
-        path, paths = request.path.strip('/').split('/'), data['paths']
+        nodes, paths, path = (data['nodes'], data['paths'],
+                              request.path.strip('/').split('/'),)
 
         # check existance of path starting from current path down to its first
         # ancestor: on "/a/b/c/" page look for "a/b/c" or "a/b" or "a" in paths
         for pkey in ('/'.join(path[:-i or None]) for i in range(0, len(path))):
             selected = paths.get(pkey, None)
             if selected:
-                # check selected for existance in morphed by
-                # per_request modifiers nodes list (auth visibility, ect.)
-                if not selected.id in nodeids:
-                    continue
-
-                # mark node as selected and return
-                selected.selected = True
-
                 # save unmodified chain up to root
                 chain, item = [selected], selected
                 while item.parent:
                     item = item.parent
                     chain.insert(0, item)
 
+                # check selected for existance in morphed by
+                # per_request modifiers nodes list (auth visibility, ect.)
+                if not chain[0] in nodes:
+                    continue
+
+                # mark node as selected and return
+                selected.selected = True
+
                 return selected, chain
         return None, None
-    
-    
-    
-    
-    
-    
-    
-    
+
+    # Common methods
+    # --------------
     def add_nodes_to_request(self, request):
         """prepare request for menus processing"""
         if not hasattr(request, 'nodes'):
             metadata = import_path(msettings.META_DATA)
             request.nodes = metadata()
-
-
-
-
-
-
-
-
 
     def prepare_menus_settings(self):
         """Prepare menus settings and check validity"""

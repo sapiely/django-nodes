@@ -12,11 +12,11 @@ reload(sys).setdefaultencoding("UTF-8")
 
 setup(
     name='django-nodes',
-    version='0.1',
+    version='1.11.0',
 
     description = (u'A content management toolkit for Django'
                    u' framework'.encode('utf8')),
-    long_description = (open('README.rst').read().decode('utf8') 
+    long_description = (open('README.rst').read().decode('utf8')
                         + open('CHANGES.rst').read().decode('utf8')),
 
     author='Guchetl Murat',

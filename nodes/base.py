@@ -85,13 +85,15 @@ class Menu(object):
     """blank menu class"""
     namespace = None
     weight = 500
+    navigation_node_class = None
 
     def __init__(self):
         if not self.namespace:
             self.namespace = self.__class__.__name__
 
     def get_navigation_node_class(self):
-        return import_path(msettings.NAVIGATION_NODE)
+        return self.navigation_node_class or import_path(
+            msettings.NAVIGATION_NODE)
 
     def get_nodes(self, request):
         """should return a list of NavigationNode instances"""
@@ -105,9 +107,9 @@ class Modifier(object):
     def modify(self, request, data, meta, **kwargs):
         """
         This method takes nodes data dict (
-            {"nodes": nodes, "selected": selected,}
+            {"nodes": nodes, "selected": selected, 'chain': chain,}
         ) and should update "nodes" value, if required.
-        Nodes should be always returned in linear format.
+        Nodes should be always returned in hierarchical format.
         """
         raise NotImplementedError
 
@@ -120,14 +122,13 @@ class NavigationNode(object):
     namespace = None
     data = None
 
-    id = None
     parent = None
     children = None
+    id = None   # only for processor.build_nodes method,
+                # should be unique within each Menu data definition
 
     visible = True
     selected = False
-    active = True
-    modified = False
 
     def __init__(self, title, url, id, parent=None, visible=True,
                  data=None, **kwargs):
@@ -144,6 +145,9 @@ class NavigationNode(object):
     def __repr__(self):
         return u'<Navigation Node: %s>' % self.title
 
+    def on_selected(self, menuconf, nodes, request):
+        return False
+
 
 class MetaData(object):
     selected = None
@@ -153,3 +157,5 @@ class MetaData(object):
     def __init__(self):
         self.chain = []
         self.title = []
+        self.keywords = []  # tobe deleted
+        self.description = []  # tobe deleted
