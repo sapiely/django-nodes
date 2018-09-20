@@ -169,12 +169,12 @@ class NavigationExtender(Modifier):
     modify_event = ONCE
 
     def modify(self, request, data, meta, **kwargs):
+        # a bit of optimizations
+        if meta['rebuild_mode']:
+            return
+
         nodes, processed = data['nodes'], []
         for node in tgenerator(nodes):
-            # a bit of optimizations
-            if meta['rebuild_mode']:
-                return
-
             extenders = node.data.get("navigation_extenders", None)
             if not extenders:
                 continue
@@ -186,7 +186,9 @@ class NavigationExtender(Modifier):
                     if n.namespace == extender:
                         n.parent = node
                         node.children.append(n)
-
+        # filter root nodes if any processed extenders
+        if processed:
+            nodes[:] = [i for i in nodes if not i.parent]
         data['nodes'] = nodes
 
 
