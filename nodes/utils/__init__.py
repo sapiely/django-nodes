@@ -2,8 +2,8 @@ from importlib import import_module
 
 
 def add_nodes_to_request(request):
-    from .. import reqistry
-    reqistry.processor.add_nodes_to_request(request)
+    from .. import registry
+    registry.processor.add_nodes_to_request(request)
 
 def import_path(import_path, alternate=None):
     """import module by import_path"""
