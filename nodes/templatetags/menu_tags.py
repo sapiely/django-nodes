@@ -1,7 +1,7 @@
 import re
 from django import template
+from nodes.base import registry
 from nodes.utils.template import inclusion_tag, get_from_context
-from nodes import registry
 
 def show_menu(context, from_level=0, to_level=100,
               extra_inactive=0, extra_active=100,

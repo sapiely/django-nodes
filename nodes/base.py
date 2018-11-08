@@ -159,3 +159,7 @@ class MetaData(object):
         self.title = []
         self.keywords = []  # tobe deleted
         self.description = []  # tobe deleted
+
+
+# registy singleton
+registry = Registry()

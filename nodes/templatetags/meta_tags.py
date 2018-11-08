@@ -7,7 +7,7 @@ def show_meta_title(context, main_title='', template="metas/title.html"):
     request = get_from_context(context, 'request')
     title   = [main_title] if main_title else []
     title  += request.nodes.title
-    title   = [title[i] for i in xrange(len(title)) if not (i and title[i] == title[i-1])]
+    title   = [title[i] for i in range(len(title)) if not (i and title[i] == title[i-1])]
     context.update({'title':title, 'template':template, })
     return context
 
@@ -22,7 +22,7 @@ def show_meta_chain(context, main_title='', main_url='/', start_level=0, templat
     request = get_from_context(context, 'request')
     chain   = [{'name':main_title, 'link':main_url}] if main_title else []
     chain  += request.nodes.chain
-    chain   = [chain[i] for i in xrange(len(chain)) if not (i and chain[i] == chain[i-1])]
+    chain   = [chain[i] for i in range(len(chain)) if not (i and chain[i] == chain[i-1])]
     chain   = chain[start_level:] if len(chain) >= start_level else []
     context.update({'chain': chain, 'template': template, })
     return context

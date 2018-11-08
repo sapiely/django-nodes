@@ -1,45 +1,88 @@
-#!/usr/bin/env python
-# - coding: utf-8 -
-from distutils.core import setup
+# https://packaging.python.org/tutorials/distributing-packages/
+# Always prefer setuptools over distutils
+from setuptools import setup, find_packages
+# To use a consistent encoding
+from codecs import open
+from os import path
 
-for cmd in ('egg_info', 'develop'):
-    import sys
-    if cmd in sys.argv:
-        from setuptools import setup
+here = path.abspath(path.dirname(__file__))
 
-import sys
-reload(sys).setdefaultencoding("UTF-8")
+# Get the long description from the README file
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     name='django-nodes',
-    version='1.11.0',
 
-    description = (u'A content management toolkit for Django'
-                   u' framework'.encode('utf8')),
-    long_description = (open('README.rst').read().decode('utf8')
-                        + open('CHANGES.rst').read().decode('utf8')),
+    # Versions should comply with PEP440. For a discussion on single-sourcing
+    # the version across setup.py and the project code, see
+    # https://packaging.python.org/en/latest/single_source_version.html
+    version='.'.join(map(str, __import__('nodes').VERSION)),
 
-    author='Guchetl Murat',
+    description = 'A menus and navigation framework for Django framework.',
+    long_description=long_description,
+
+    # The project's main homepage.
+    url='https://github.com/sakkada/django-nodes',
+
+    # Author details
+    author='Murat Guchetl',
     author_email='gmurka@gmail.com',
 
-    url='https://bitbucket.org/sakkada/django-nodes/',
+    license='BSD License',  # Taken from django-cms
 
-    packages=['nodes',],
-    license = 'MIT license',
-
-    requires=['django (>= 1.4)'],
-
-    classifiers=(
+    # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
+    classifiers=[
+        # How mature is this project? Common values are
+        #   3 - Alpha
+        #   4 - Beta
+        #   5 - Production/Stable
         'Development Status :: 4 - Beta',
+
+        # Indicate who your project is intended for
+        'Intended Audience :: Developers',
+        'Topic :: Internet :: WWW/HTTP',
+        'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
+        'Topic :: Software Development :: Libraries :: Application Frameworks',
+        'Topic :: Software Development :: Libraries :: Python Modules',
         'Environment :: Web Environment',
         'Framework :: Django',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
+        'Framework :: Django :: 2.0',
+
+        # Pick your license as you wish (should match "license" above)
+        'License :: OSI Approved :: BSD License',
+
+        # Specify the Python versions you support here. In particular, ensure
+        # that you indicate whether you support Python 2, Python 3 or both.
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+
+        'Operating System :: OS Independent',
+
         'Natural Language :: English',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-    ),
+    ],
+
+    # What does your project relate to?
+    keywords='django content navigation template menus breadcrumbs metatags',
+
+    # You can just specify the packages manually here if your project is
+    # simple. Or you can use find_packages().
+    #   packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    #   packages=['application',],
+    packages=['nodes',],
+
+    # List run-time dependencies here. These will be installed by pip when
+    # your project is installed. For an analysis of "install_requires" vs pip's
+    # requirements files see:
+    # https://packaging.python.org/en/latest/requirements.html
+    install_requires=[
+        'django>=2.0.0',
+    ],
+
+    python_requires='>=3.6, <4',
+
+    extras_require={},
+    include_package_data=True,
+    zip_safe=False
 )

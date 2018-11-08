@@ -1,6 +1,6 @@
 import copy
 import re
-import urlparse
+from urllib import parse
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sites.shortcuts import get_current_site
@@ -278,7 +278,7 @@ class Processor(object):
         return node.data.get('weight', 500) >= prevnode.data.get('weight', 500)
 
     def get_path(self, node):
-        p = urlparse.urlparse(node.url_original)
+        p = parse.urlparse(node.url_original)
         if p.netloc and not self.check_node_url_with_domain(p.netloc, node):
             return None
         return p.path.strip('/')
@@ -345,7 +345,7 @@ class Processor(object):
 
         # check MENUS
         # todo: may be someway disable menus if improperly configured
-        if not isinstance(MENUS, dict) or not MENUS.has_key('default'):
+        if not isinstance(MENUS, dict) or not 'default' in MENUS:
             raise ImproperlyConfigured('Menus "MENUS" setting value'
                                        ' is empty/incorrect or not contains'
                                        ' "default" key.')

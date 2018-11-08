@@ -1,5 +1,5 @@
 import functools
-from inspect import getargspec
+from inspect import getfullargspec
 from django.utils import six
 from django.template.base import Template
 from django.template.library import InclusionNode, parse_bits
@@ -71,7 +71,7 @@ def inclusion_tag(register, func=None, takes_context=None, name=None):
     """
 
     def dec(func):
-        params, varargs, varkw, defaults = getargspec(func)
+        params, varargs, varkw, defaults, kwonly, kwonly_defaults, _ = getfullargspec(func)
         function_name = (name or getattr(func, '_decorated_function', func).__name__)
 
         @functools.wraps(func)
@@ -79,7 +79,7 @@ def inclusion_tag(register, func=None, takes_context=None, name=None):
             bits = token.split_contents()[1:]
             args, kwargs = parse_bits(
                 parser, bits, params, varargs, varkw, defaults,
-                takes_context, function_name,
+                kwonly, kwonly_defaults, takes_context, function_name
             )
             return InclusionNode(
                 func, takes_context, args, kwargs, '',

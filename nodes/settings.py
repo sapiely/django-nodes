@@ -44,7 +44,7 @@ DEFAULT_META_DATA = 'nodes.base.MetaData'
 DEFAULT_PROCESSOR = 'nodes.processor.Processor'
 DEFAULT_NAVIGATION_NODE = 'nodes.base.NavigationNode'
 
-MENU_APPS           = getattr(settings, 'MENUS_APPS', None)
+MENU_APPS           = getattr(settings, 'MENUS_APPS', [])
 BUILTIN_MODIFIERS   = getattr(settings, 'MENUS_BUILTIN_MODIFIERS', True)
 PROCESSOR           = getattr(settings, 'MENUS_PROCESSOR', DEFAULT_PROCESSOR)
 META_DATA           = getattr(settings, 'MENUS_META_DATA', DEFAULT_META_DATA)
