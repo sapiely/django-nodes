@@ -3,6 +3,7 @@ from django import template
 from nodes.base import registry
 from nodes.utils.template import inclusion_tag, get_from_context
 
+
 def show_menu(context, from_level=0, to_level=100,
               extra_inactive=0, extra_active=100,
               template=None, show_invisible=False, show_inactive_branch=False,
@@ -53,6 +54,7 @@ def show_menu(context, from_level=0, to_level=100,
     })
     return context
 
+
 def load_menu(parser, token):
     """loads menu, set data to request.meta first"""
     class LoadMenuNode(template.Node):
@@ -61,6 +63,7 @@ def load_menu(parser, token):
             registry.processor.get_nodes(None, request, init_only=True)
             return ''
     return LoadMenuNode()
+
 
 register = template.Library()
 load_menu = register.tag(load_menu)

@@ -2,8 +2,9 @@ from importlib import import_module
 
 
 def add_nodes_to_request(request):
-    from .. import registry
+    from ..base import registry
     registry.processor.add_nodes_to_request(request)
+
 
 def import_path(import_path, alternate=None):
     """import module by import_path"""
@@ -43,6 +44,7 @@ def tgenerator(nodes):
                                                             i6.children):
                                                         yield deeper
 
+
 def tcutter(nodes, function):
     """Cut tree by function."""
     for i in nodes[:]:
@@ -67,6 +69,7 @@ def tcutter(nodes, function):
                                         elif i5.children:
                                             tcutter(i5.children, function)
     return nodes
+
 
 def tfilter(nodes, function, final=None):
     """Filter tree by function."""
