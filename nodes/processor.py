@@ -288,7 +288,7 @@ class Processor(object):
         for node in tgenerator(nodes):
             path = self.get_path(node)
             # ignore nodes with denied domain name and/or empty path
-            if not path:
+            if path is None:
                 continue
             # check node is new or it is better match than previous
             if not path in data or self.compare_paths(node, data[path]):
