@@ -193,6 +193,7 @@ class NavigationExtender(Modifier):
 
 
 class MetaDataProcessor(Modifier):
+    """Processor adds meta data (title, chain, etc.) to current request."""
     modify_event = POST_SELECT
 
     def modify(self, request, data, meta, **kwargs):
@@ -203,19 +204,9 @@ class MetaDataProcessor(Modifier):
         metadata = request.nodes
         metadata.selected = selected
         if chain:
-            metadata.keywords = getattr(metadata, 'keywords', [])
-            metadata.description = getattr(metadata, 'description', [])
-
-            # save metadata to reauest
-            metadata.chain = [{'name': n.title, 'link': n.url, 'data': n.data,}
-                              for n in chain] + metadata.chain
-            metadata.title = [n.data.get('meta_title', u'') or n.title
+            metadata.chain = chain + metadata.chain
+            metadata.title = [n.data.get('meta_title', '') or n.title
                               for n in chain] + metadata.title
-            metadata.keywords = [chain[-1].data.get('meta_keywords', u'')] + metadata.keywords
-            metadata.description = [chain[-1].data.get('meta_description', u'')] + metadata.description
-        if selected and not (chain and selected == chain[-1]):
-            # set selected meta_title to title tag anyway
-            metadata.title.append(selected.data.get('meta_title', u'') or selected.title)
 
 
 class PositionalMarker(Modifier):

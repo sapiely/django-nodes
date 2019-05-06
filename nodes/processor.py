@@ -333,8 +333,7 @@ class Processor(object):
     def add_nodes_to_request(self, request):
         """prepare request for menus processing"""
         if not hasattr(request, 'nodes'):
-            metadata = import_path(msettings.META_DATA)
-            request.nodes = metadata()
+            request.nodes = self.registry.meta_data()
 
     def prepare_menus_settings(self):
         """Prepare menus settings and check validity"""
@@ -381,7 +380,7 @@ class Processor(object):
 
             for mname, mvalue in modifiers.items():
                 if mvalue and not validvalue(mvalue, modkeys):
-                    errors[name] = ('Menus "%s" MODIFIERS "%s" value (%s)'
+                    errors[name] = ('Menus "%s" MODIFIERS set "%s" value (%s)'
                                     ' is invalid.' % (name, mname, mvalue,))
                     invalid = True
             if invalid:
