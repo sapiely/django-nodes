@@ -172,9 +172,7 @@ class MetaTags(object):
             this = type(self)(data=tags.values(), action=action)
             tags, action = self.copy().data, self.action
 
-        if action == 'unset':
-            this.data = {}
-        elif action == 'set':
+        if action in ('set', 'unset',):
             this.data = tags
         elif action in ('add', 'addleft',) and tags:
             lside, rside = ((this.data, tags,) if action == 'add' else
@@ -351,6 +349,9 @@ class StringMetaTag(BaseMetaTag):
         if other.action in ('set', 'unset',):
             this.data = other.data
         elif other.action in ('add', 'addleft',):
+            if this.action == 'unset' and this.data is None:
+                this.data = {VALUE: '',}
+
             localdata = {k:v for k, v in this.data.items() if not k == VALUE}
             otherdata = {k:v for k, v in other.data.items()
                          if not k == VALUE and not k.startswith(':')}
@@ -361,7 +362,7 @@ class StringMetaTag(BaseMetaTag):
             else:
                 value = other.data[VALUE] + separator + this.data[VALUE]
                 attrs = {**otherdata, **localdata}
-            this.data = {**attrs, VALUE: value}
+            this.data = {**attrs, VALUE: value.strip()}
 
         return this
 
@@ -468,6 +469,9 @@ class SeparatedValueMetaTag(StringMetaTag):
         if other.action in ('set', 'unset',):
             this.data = other.data
         elif other.action in ('add', 'addleft',):
+            if this.action == 'unset' and this.data is None:
+                this.data = {VALUE: [],}
+
             localdata = {k:v for k, v in this.data.items() if not k == VALUE}
             otherdata = {k:v for k, v in other.data.items()
                          if not k == VALUE and not k.startswith(':')}
@@ -567,6 +571,9 @@ class ListMetaTag(BaseMetaTag):
         if other.action in ('set', 'unset',):
             this.data = other.data
         elif other.action in ('add', 'addleft',):
+            if this.action == 'unset' and this.data is None:
+                this.data = []
+
             if other.action == 'add':
                 value = this.data + other.data
             else:
@@ -681,10 +688,13 @@ class DictMetaTag(BaseMetaTag):
         if other.action in ('set', 'unset',):
             this.data = other.data
         elif other.action in ('add', 'addleft',):
+            if this.action == 'unset' and this.data is None:
+                this.data = {}
+
             if other.action == 'add':
-                ldata, rdata = self.data, other.data
+                ldata, rdata = this.data, other.data
             else:
-                ldata, rdata = other.data, self.data
+                ldata, rdata = other.data, this.data
             this.data = self._dicts_merge_rec_helper(copy.deepcopy(ldata),
                                                      copy.deepcopy(rdata))
 

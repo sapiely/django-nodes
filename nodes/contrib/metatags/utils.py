@@ -30,12 +30,14 @@ def get_metatags_model(model='metatag', as_string=False, silent=False):
         raise ImproperlyConfigured(msg)
 
 
-def get_metatags_for_object(obj):
+def get_metatags_container_for_object(obj):
     if isinstance(obj, MetaTagsMixin):
-        return obj.get_metatags()
+        return obj
 
-    container_model = get_metatags_model('container', silent=True)
-    if container_model:
-        return container_model.get_metatags_for_object(obj)
+    ContainerModel = get_metatags_model('container', silent=True)
+    return ContainerModel and ContainerModel.get_for_object(obj)
 
-    return None
+
+def get_metatags_for_object(obj):
+    container = get_metatags_container_for_object(obj)
+    return container and container.get_metatags()

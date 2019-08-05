@@ -6,9 +6,9 @@ from django.forms.widgets import Media, Textarea
 from django.contrib.contenttypes.forms import BaseGenericInlineFormSet
 from django.contrib.contenttypes.admin import (GenericTabularInline,
                                                GenericStackedInline)
-from .models import ACTION_CHOICES, BaseMetaTag, BaseMetaTagsContainer
+from .models import BaseMetaTag, BaseMetaTagsContainer, MetaTagsMixin
 from .tags import registry, MetaTagValueError
-from .utils import get_metatags_model
+from .utils import get_metatags_model, get_metatags_container_for_object
 
 
 # Admin forms
@@ -41,7 +41,11 @@ class BaseMetaTagForm(forms.ModelForm):
 
     class Meta:
         fields = ('name', 'text', 'action',)
-        widgets = {'text': MetaTagTextarea,}
+        widgets = {
+            'text': MetaTagTextarea(attrs={
+                'style': 'width: 95%; min-width: 30em;',
+            }),
+        }
 
     def clean(self):
         name = self.cleaned_data.get('name')
@@ -74,6 +78,16 @@ class BaseMetaTagForm(forms.ModelForm):
 
 
 class BaseMetaTagGenericInlineFormSet(BaseGenericInlineFormSet):
+
+    def __init__(self, **kwargs):
+        self.instance_original = instance = kwargs.get('instance', None)
+        if isinstance(instance, MetaTagsMixin):
+            self.instance_is_container = True
+        else:
+            self.instance_is_container = False
+            instance = instance and get_metatags_container_for_object(instance)
+        super().__init__(**{**kwargs, 'instance': instance,})
+
     def clean(self):
         if any(self.errors):
             return
@@ -83,6 +97,12 @@ class BaseMetaTagGenericInlineFormSet(BaseGenericInlineFormSet):
 
         if not len(set(tags)) == len(tags):
             raise forms.ValidationError('Each tag should be defined only once.')
+
+        # todo: allow to choose - generate container on the fly or
+        #                         require it existance
+        if not self.instance_is_container and not (self.instance and
+                                                   self.instance.pk) and tags:
+            raise forms.ValidationError('Metatags container is not defined.')
 
 
 class MetaTagsContainerGenericInlineForm(forms.ModelForm):
@@ -110,18 +130,13 @@ class MetaTagGenericInline(GenericTabularInline):
 
 class MetaTagsContainerGenericInline(GenericStackedInline):
     model = get_metatags_model(model='container') or BaseMetaTagsContainer
-    fields = ('metatags_action', 'get_metatags_as_plain',)
+    fields = ('metatags_action',)
     form = MetaTagsContainerGenericInlineForm
-    readonly_fields = ('get_metatags_as_plain',)
     show_change_link = True
     can_delete = True
     min_num = 0
     max_num = 1
     extra = 0
-
-    def get_metatags_as_plain(self, obj):
-        return obj.get_metatags().as_plain() or '-'
-    get_metatags_as_plain.short_description = 'Metatags'
 
 
 class MetaTagAdmin(admin.ModelAdmin):

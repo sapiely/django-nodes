@@ -132,8 +132,3 @@ class BaseMetaTagsContainer(MetaTagsMixin, models.Model):
     def get_for_object(cls, obj):
         ct = ContentType.objects.get_for_model(type(obj))
         return cls.objects.filter(content_type=ct, object_id=obj.id).first()
-
-    @classmethod
-    def get_metatags_for_object(cls, obj):
-        container = cls.get_for_object(obj)
-        return container and container.get_metatags()

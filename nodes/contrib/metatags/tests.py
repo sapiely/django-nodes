@@ -252,6 +252,12 @@ class MetaTagsContainerTest(unittest.TestCase):
         self.assertEqual(mt + {}, mt)
         self.assertEqual(mt + None, mt)
 
+        # add and unset metatags work together
+        self.assertEqual(({':action': 'unset'} + mt).action, 'unset')
+        self.assertEqual(({':action': 'unset'} + mt).data, mt.data)
+        self.assertEqual(MetaTags('keywords =+ a') + {':action': 'unset'} + {'keywords': {VALUE: 'b', ':action': 'set'}},
+                         MetaTags('keywords = b'))
+
     def test_compile(self):
         mt = MetaTags()
         self.assertEqual(tuple(mt.compile('').keys()), ())
@@ -449,6 +455,7 @@ class StringMetaTagTest(unittest.TestCase):
         self.assertEqual(str(tag1), '<meta name="description" content="1">')
         self.assertEqual(str(tag1 + tag2), '<meta name="description" content="2">')
         self.assertEqual(str(tag1 + tag3), '')
+        self.assertEqual(str(tag3 + tag3), '')
         self.assertEqual(str(tag1 + tag4), '<meta name="description" content="">')
         self.assertEqual(str(tag1 + tag2 + tag3), '')
         self.assertEqual(str(tag1 + tag3 + tag2), '<meta name="description" content="2">')
@@ -458,11 +465,17 @@ class StringMetaTagTest(unittest.TestCase):
         tag2 = cls('description', {VALUE: '2'}, action='add')
         tag3 = cls('description', {VALUE: '3'}, action='addleft')
         tag4 = cls('description', {VALUE: '4', ':separator': ' | ', 'b': 'B', 'c': 'c'}, action='add')
+        tag5 = cls('description', action='unset')
+        tag6 = tag5 + tag2
 
         self.assertEqual(str(tag1 + tag2), '<meta name="description" content="1 2" a="a" b="b">')
         self.assertEqual(str(tag1 + tag3), '<meta name="description" content="3 1" a="a" b="b">')
         self.assertEqual(str(tag1 + tag4), '<meta name="description" content="1 | 4" a="a" b="B" c="c">')
         self.assertEqual(str(tag1 + tag2 + tag3), '<meta name="description" content="3 1 2" a="a" b="b">')
+        self.assertEqual(str(tag5 + tag2), '<meta name="description" content="2">')  # unset + add
+        self.assertEqual(str(tag5 + tag3), '<meta name="description" content="3">')  # unset + addleft
+        self.assertEqual(str(tag6 + tag3), '<meta name="description" content="3 2">')  #  unset + add + addleft
+        self.assertEqual(str(tag3 + tag6), '<meta name="description" content="2">')  #  addleft + unset + add
         self.assertEqual(tag1.data, {VALUE: '1', 'a': 'a', 'b': 'b'})  # tag1 not changed
 
         # tags addition modifies left tag in expression
@@ -647,6 +660,7 @@ class SeparatedValueMetaTagTest(unittest.TestCase):
         self.assertEqual(str(tag1), '<meta name="keywords" content="1, 2">')
         self.assertEqual(str(tag1 + tag2), '<meta name="keywords" content="3, 4">')
         self.assertEqual(str(tag1 + tag3), '')
+        self.assertEqual(str(tag3 + tag3), '')
         self.assertEqual(str(tag1 + tag4), '<meta name="keywords" content="">')
         self.assertEqual(str(tag1 + tag2 + tag3), '')
         self.assertEqual(str(tag1 + tag3 + tag2), '<meta name="keywords" content="3, 4">')
@@ -656,11 +670,17 @@ class SeparatedValueMetaTagTest(unittest.TestCase):
         tag2 = cls('description', {VALUE: '3,4'}, action='add')
         tag3 = cls('description', {VALUE: '5,6'}, action='addleft')
         tag4 = cls('description', {VALUE: '7,8', ':separator': ' | ', 'b': 'B', 'c': 'c'}, action='add')
+        tag5 = cls('description', None, action='unset')
+        tag6 = tag5 + tag2
 
         self.assertEqual(str(tag1 + tag2), '<meta name="description" content="1, 2, 3, 4" a="a" b="b">')
         self.assertEqual(str(tag1 + tag3), '<meta name="description" content="5, 6, 1, 2" a="a" b="b">')
         self.assertEqual(str(tag1 + tag4), '<meta name="description" content="1, 2, 7, 8" a="a" b="B" c="c">')
         self.assertEqual(str(tag1 + tag2 + tag3), '<meta name="description" content="5, 6, 1, 2, 3, 4" a="a" b="b">')
+        self.assertEqual(str(tag5 + tag2), '<meta name="description" content="3, 4">')  # unset + add
+        self.assertEqual(str(tag5 + tag3), '<meta name="description" content="5, 6">')  # unset + addleft
+        self.assertEqual(str(tag6 + tag3), '<meta name="description" content="5, 6, 3, 4">')  #  unset + add + addleft
+        self.assertEqual(str(tag3 + tag6), '<meta name="description" content="3, 4">')  #  addleft + unset + add
         self.assertEqual(tag1.data, {VALUE: ['1', '2',], 'a': 'a', 'b': 'b'})  # tag1 not changed
 
         # tags addition modifies left tag in expression
@@ -812,6 +832,7 @@ class ListMetaTagTest(unittest.TestCase):
         self.assertEqual(str(tag1), '<meta name="generator" content="1">')
         self.assertEqual(str(tag1 + tag2), '<meta name="generator" content="2">')
         self.assertEqual(str(tag1 + tag3), '')
+        self.assertEqual(str(tag3 + tag3), '')
         self.assertEqual(str(tag1 + tag4), '<meta name="generator" content="">')
         self.assertEqual(str(tag1 + tag2 + tag3), '')
         self.assertEqual(str(tag1 + tag3 + tag2), '<meta name="generator" content="2">')
@@ -821,11 +842,19 @@ class ListMetaTagTest(unittest.TestCase):
         tag2 = cls('generator', {VALUE: '2'}, action='add')
         tag3 = cls('generator', {VALUE: '3'}, action='addleft')
         tag4 = cls('generator', {VALUE: '4', ':b': 'b', 'a': 'A',}, action='add')
+        tag5 = cls('generator', None, action='unset')
+        tag6 = tag5 + tag2
 
         self.assertEqual(str(tag1 + tag2), '<meta name="generator" content="1" a="a">\n<meta name="generator" content="2">')
         self.assertEqual(str(tag1 + tag3), '<meta name="generator" content="3">\n<meta name="generator" content="1" a="a">')
         self.assertEqual(str(tag1 + tag4), '<meta name="generator" content="1" a="a">\n<meta name="generator" content="4" a="A">')
         self.assertEqual(str(tag1 + tag2 + tag3), '<meta name="generator" content="3">\n<meta name="generator" content="1" a="a">\n<meta name="generator" content="2">')
+
+        self.assertEqual(str(tag5 + tag2), '<meta name="generator" content="2">')  # unset + add
+        self.assertEqual(str(tag5 + tag3), '<meta name="generator" content="3">')  # unset + addleft
+        self.assertEqual(str(tag6 + tag3), '<meta name="generator" content="3">\n<meta name="generator" content="2">')  #  unset + add + addleft
+        self.assertEqual(str(tag3 + tag6), '<meta name="generator" content="2">')  #  addleft + unset + add
+
         self.assertEqual(tag1.data, [{VALUE: '1', 'a': 'a',}])
 
         # tags addition modifies left tag in expression
@@ -1075,6 +1104,7 @@ class DictMetaTagTest(unittest.TestCase):
         self.assertEqual(str(tag1 + tag2), '<meta name="og:a" content="b">')
         self.assertEqual(str(tag1 + tag3), '')
         self.assertEqual(str(tag1 + tag4), '')
+        self.assertEqual(str(tag3 + tag3), '')
         self.assertEqual(str(tag1 + tag2 + tag3), '')
         self.assertEqual(str(tag1 + tag3 + tag2), '<meta name="og:a" content="b">')
 
@@ -1082,10 +1112,18 @@ class DictMetaTagTest(unittest.TestCase):
         tag1 = cls('og', {'a': '1', 'b': '1'})
         tag2 = cls('og', {'a': '2'}, action='add')
         tag3 = cls('og', {'a': '3', 'c': '3'}, action='addleft')
+        tag4 = cls('og', None, action='unset')
+        tag5 = tag4 + tag2
 
         self.assertEqual(str(tag1 + tag2), '<meta name="og:a" content="2">\n<meta name="og:b" content="1">')
         self.assertEqual(str(tag1 + tag3), '<meta name="og:a" content="1">\n<meta name="og:b" content="1">\n<meta name="og:c" content="3">')
         self.assertEqual(str(tag1 + tag2 + tag3), '<meta name="og:a" content="2">\n<meta name="og:b" content="1">\n<meta name="og:c" content="3">')
+
+        self.assertEqual(str(tag4 + tag2), '<meta name="og:a" content="2">')  # unset + add
+        self.assertEqual(str(tag4 + tag3), '<meta name="og:a" content="3">\n<meta name="og:c" content="3">')  # unset + addleft
+        self.assertEqual(str(tag5 + tag3), '<meta name="og:a" content="2">\n<meta name="og:c" content="3">')  #  unset + add + addleft
+        self.assertEqual(str(tag3 + tag5), '<meta name="og:a" content="2">')  #  addleft + unset + add
+
         self.assertEqual(tag1.data, {'a': '1', 'b': '1',})
 
         # tags addition modifies left tag in expression
