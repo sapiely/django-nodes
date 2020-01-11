@@ -1,4 +1,5 @@
 import copy
+import time
 from django.core.exceptions import ImproperlyConfigured
 from .utils import import_path
 from . import settings as msettings
@@ -81,12 +82,30 @@ class Registry(object):
         return self._navigation_node
 
     def autodiscover(self):
-        if self.discovered:
+        if self.discovered is True:
             return
-        elif self.discovered is not None:
-            self.clear()
-        else:
-            self.discovered = False
+
+        error_timeout = time.time() + 20
+        discover_timeout, discover_timeout_step = 5, 0.1
+        while True:
+            # try to lock autodiscoverer (atomic operation)
+            self.discovered, is_locked = (
+                (time.time() + discover_timeout, True,)
+                if not self.discovered or (self.discovered is not True and
+                                           time.time() >= self.discovered) else
+                (self.discovered, False,)
+            )
+
+            discovered = self.discovered  # save to local thread variable
+            if discovered is True:
+                return
+            elif is_locked:
+                break
+            elif time.time() < discovered:
+                time.sleep(discover_timeout_step)
+                continue
+            elif time.time() >= timeout:
+                raise ImproperlyConfigured('Menus autodiscover timeout error.')
 
         # import menu modules of defined apps
         for app in msettings.MENUS_APPS:
@@ -108,6 +127,7 @@ class Registry(object):
                         % modifier_path)
                 self.register_modifier(modifier,
                                        replace=msettings.MODIFIERS_REPLACE)
+        # release lock and set discovered value
         self.discovered = True
 
     def register_menu(self, menu):

@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib import admin
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.forms.widgets import Media, Textarea
 from django.contrib.contenttypes.forms import BaseGenericInlineFormSet
