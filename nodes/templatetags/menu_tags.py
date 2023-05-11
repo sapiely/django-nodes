@@ -81,11 +81,16 @@ def show_meta_title(context, main_title='', template='metas/title.html',
     - check_context: append title by metadata:title context variable
     """
     request = get_from_context(context, 'request')
-    title = ([main_title] if main_title else []) + request.nodes.title
+    title_meta_tag = request.nodes.metatags.data.get('title', None)
+    title = ([main_title] if main_title else [])
+    if title_meta_tag is not None:
+        title += [request.nodes.metatags.data.pop('title').data.get('value')]
+    else:
+        title += request.nodes.title
     metadata = context.get('metadata', None)
     if isinstance(metadata, dict) and check_context:
         title += [str(i) for i in metadata.get('title', [])]
-    context.update({'title': title, 'template': template,})
+    context.update({'title': title, 'template': template, })
     return context
 
 
