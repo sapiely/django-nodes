@@ -123,6 +123,12 @@ def show_meta_selected(context, pattern="<h1>%s</h1>"):
     pattern = (pattern % selected.data.get('title', selected.title)
                if selected and selected.data.get('show_meta_selected', True)
                else '')
+    metadata = context.get('metadata', None)
+    if isinstance(metadata, dict):
+        try:
+            pattern = metadata.get('title', [])[0].title
+        except Exception:
+            pass
     return mark_safe(pattern)
 
 
