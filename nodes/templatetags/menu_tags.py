@@ -120,9 +120,12 @@ def show_meta_selected(context, pattern="<h1>%s</h1>"):
     request = get_from_context(context, 'request')
     selected = request.nodes.selected
     pattern = pattern if '%s' in pattern else '%s'
-    pattern = (pattern % selected.data.get('title', selected.title)
-               if selected and selected.data.get('show_meta_selected', True)
-               else '')
+    display_value = (
+        selected.data.get('header', selected.data.get('title', selected.title))
+        if selected and selected.data.get('show_meta_selected', True) else ''
+    )
+    pattern = pattern % display_value
+
     metadata = context.get('metadata', None)
     if isinstance(metadata, dict):
         try:
